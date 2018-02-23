@@ -95,6 +95,7 @@ void ConfigureGraphics::setConfiguration() {
     ui->toggle_hw_renderer->setChecked(Settings::values.use_hw_renderer);
     ui->resolution_factor_combobox->setEnabled(Settings::values.use_hw_renderer);
     ui->toggle_shader_jit->setChecked(Settings::values.use_shader_jit);
+    ui->toggle_gpu_vertex_shader->setChecked(Settings::values.use_gpu_vertex_shader);
     ui->resolution_factor_combobox->setCurrentIndex(
         static_cast<int>(FromResolutionFactor(Settings::values.resolution_factor)));
     ui->toggle_vsync->setChecked(Settings::values.use_vsync);
@@ -107,6 +108,7 @@ void ConfigureGraphics::setConfiguration() {
 void ConfigureGraphics::applyConfiguration() {
     Settings::values.use_hw_renderer = ui->toggle_hw_renderer->isChecked();
     Settings::values.use_shader_jit = ui->toggle_shader_jit->isChecked();
+    Settings::values.use_gpu_vertex_shader= ui->toggle_gpu_vertex_shader->isChecked();
     Settings::values.resolution_factor =
         ToResolutionFactor(static_cast<Resolution>(ui->resolution_factor_combobox->currentIndex()));
     Settings::values.use_vsync = ui->toggle_vsync->isChecked();

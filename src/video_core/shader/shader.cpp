@@ -13,6 +13,7 @@
 #include "video_core/regs_shader.h"
 #include "video_core/shader/shader.h"
 #include "video_core/shader/shader_interpreter.h"
+#include "video_core/shader/shader_gpu.h"
 #ifdef ARCHITECTURE_x86_64
 #include "video_core/shader/shader_jit_x64.h"
 #endif // ARCHITECTURE_x86_64
@@ -139,9 +140,18 @@ MICROPROFILE_DEFINE(GPU_Shader, "GPU", "Shader", MP_RGB(50, 50, 240));
 #ifdef ARCHITECTURE_x86_64
 static std::unique_ptr<JitX64Engine> jit_engine;
 #endif // ARCHITECTURE_x86_64
+static std::unique_ptr<GpuShaderEngine> gpu_shader_engine;
 static InterpreterEngine interpreter_engine;
 
 ShaderEngine* GetEngine() {
+
+    if(VideoCore::g_gpu_vertex_shader_enabled){
+        if(gpu_shader_engine == nullptr){
+            gpu_shader_engine = std::make_unique<GpuShaderEngine>();
+        }
+        return gpu_shader_engine.get();
+    }
+
 #ifdef ARCHITECTURE_x86_64
     // TODO(yuriks): Re-initialize on each change rather than being persistent
     if (VideoCore::g_shader_jit_enabled) {
@@ -156,6 +166,7 @@ ShaderEngine* GetEngine() {
 }
 
 void Shutdown() {
+    gpu_shader_engine = nullptr;
 #ifdef ARCHITECTURE_x86_64
     jit_engine = nullptr;
 #endif // ARCHITECTURE_x86_64

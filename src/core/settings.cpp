@@ -23,6 +23,7 @@ void Apply() {
 
     VideoCore::g_hw_renderer_enabled = values.use_hw_renderer;
     VideoCore::g_shader_jit_enabled = values.use_shader_jit;
+    VideoCore::g_gpu_vertex_shader_enabled = values.use_gpu_vertex_shader;
 
     if (VideoCore::g_emu_window) {
         auto layout = VideoCore::g_emu_window->GetFramebufferLayout();
