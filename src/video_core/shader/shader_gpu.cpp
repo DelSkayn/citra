@@ -1,3 +1,7 @@
+
+#include <nihstro/shader_bytecode>
+
+#include "common/logging/log.h"
 #include "video_core/shader/debug_data.h"
 #include "video_core/shader/shader.h"
 #include "video_core/shader/shader_gpu.h"
@@ -19,7 +23,16 @@ GpuShaderEngine::GpuShaderEngine(){
     this->fallback = std::make_unique<InterpreterEngine>();
 }
 
+void GpuShaderEngine::CompileShader(ShaderSetup& setup, unsigned int entry_point){
+    LOG_DEBUG(HW_GPU, "Compiling new shader");
+    setup.engine_data.tried_gpu_compilation = true;
+}
+
 void GpuShaderEngine::SetupBatch(ShaderSetup& setup, unsigned int entry_point) {
+    if(setup.engine_data.cached_gpu_schader == nullptr
+            && !setup.engine_data.tried_gpu_compilation){
+        this->CompileShader(setup,entry_point);
+    }
     this->fallback->SetupBatch(setup,entry_point);
 }
 void GpuShaderEngine::Run(const ShaderSetup& setup, UnitState& state) const {

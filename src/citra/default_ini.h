@@ -80,6 +80,10 @@ use_hw_renderer =
 # 0: Interpreter (slow), 1 (default): JIT (fast)
 use_shader_jit =
 
+# Whether to use glsl compiler for shader emulation, the emulation will fallback to a other compiler
+# If there shader could not be compiled
+use_gpu_vertex_shader =
+
 # Resolution scale factor
 # 0: Auto (scales resolution to window size), 1: Native 3DS screen resolution, Otherwise a scale
 # factor for the 3DS resolution

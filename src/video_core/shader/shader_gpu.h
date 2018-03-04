@@ -15,6 +15,8 @@ public:
     ~GpuShaderEngine() override;
     void SetupBatch(ShaderSetup& setup, unsigned int entry_point) override;
     void Run(const ShaderSetup& setup, UnitState& state) const override;
+
+    void CompileShader(ShaderSetup& setup, unsigned int entry_point);
 };
 
 } // namespace
