@@ -36,43 +36,25 @@ struct SymbolTable{
 }
 */
 
-enum ControlFlowError{
+enum CompileError{
     AnalysisRanOutsideOfShaderProgram,
     DstTargetBeforeIf,
+    JmpTargetBeforeEntryPoint,
     UnsupportedBranchInstruction,
     None,
 }
 
-struct ShaderBlock{
-    //std::vector<Instruction> instructions;
-    unsigned in;
-    unsigned out;
-    unsigned branch;
+std::string CompilerErrorToString(CompileError e);
 
-    ShaderBlock();
 
-    bool HasBranch();
-}
-
-class ControlFlow{
-    public:
-        ControlFlowError error;
-        std::vector<ShaderBlock> blocks;
-        ControlFlow(GpuShaderCompiler & compiler);
-
-    private:
-
-        void Split(int index);
-        int entry_point;
-        int program_counter;
-        int current_block;
-        std::array<u32,MAX_PROGRAM_CODE_LENGTH> * program_code;
-}
 
 class GpuShaderCompiler{
+    ShaderSetup & setup;
+    int entry_point;
 public:
+    CompileError error;
     GpuShaderCompiler(ShaderSetup & setup,int entry_point);
-    void CompileShader();
+    bool CompileShader();
 };
 
 } // namespace

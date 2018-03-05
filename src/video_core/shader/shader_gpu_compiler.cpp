@@ -10,8 +10,24 @@ namespace Shader {
 using nihstro::Instruction;
 using nihstro::OpCode;
 
+std::string CompileErrorToString(CompileError e){
+    switch(e){
+        case AnalysisRanOutsideOfShaderProgram:
+            return "Shader analysis never hit an end instruction and continued till it ran out of instructions";
+        case DstTargetBeforeIf:
+            return "Shader analysis found a IF instruction with a jump destination before the if, this is not supported";
+        case DstTargetBeforeIf:
+            return "Shader analysis found a JMP instruction with a jump destination to before the entry point, this is currently not supported";
+        case UnsupportedBranchInstruction:
+            return "Found a branching instruction which is currently not handled by shader compiler";
+        case None:
+            return "No error happend, this should not be printed";
+    }
+}
+
 ShaderBlock::ShaderBlock(){
     this->branch = MAX_PROGRAM_CODE_LENGTH;
+    this->branch_block = MAX_PROGRAM_CODE_LENGTH;
 }
 
 ShaderBlock::HasBranch{
@@ -27,14 +43,13 @@ ControlFlow::ControlFlow(std::array<u32,MAX_PROGRAM_CODE_LENGTH> & program_code,
     }
     this->blocks.push_back({.in = entry_point});
     this->program_code = program_code;
-    this->program_counter = entry_point;
-    error = ControlFlow::None;
+    this->program_counter = entry_point; error = ControlFlow::None;
 }
 
 bool ControlFlow::Analyze(){
     for(;;program_counter++){
         if(program_counter >= MAX_PROGRAM_CODE_LENGTH){
-            error = ControlFlow::AnalysisRanOutsideOfShaderProgram;
+            error = CompileError::AnalysisRanOutsideOfShaderProgram;
             return false;
         }
         Instruction instr = {program_code[program_counter]};
@@ -43,6 +58,10 @@ bool ControlFlow::Analyze(){
         switch(instr.opcode.Value().EffectiveOpCode()){
             case OpCode::Id::JMPC:
             case OpCode::Id::JMPU:
+                if(program_counter+dest < entry_point){
+                    this->error = CompileError::JmpTargetBeforeEntryPoint;
+                    return false;
+                }
                 Split(program_counter+1,program_counter+dest);//next block
                 Split(program_counter+dest);//branch entry
                 current_block++;
@@ -50,12 +69,12 @@ bool ControlFlow::Analyze(){
             case OpCode::Id::IFC:
             case OpCode::Id::IFU:
                 if(dest < 0){
-                    error = ControlFlowError::DstTargetBeforeIf;
+                    error = CompileError::DstTargetBeforeIf;
                     return false;
                 }
                 Split(program_counter+1,program_counter + dest);//next block
                 if(instr.flow_control.num_instructions == 0){
-                    //same as jump
+                    //same as jmp
                     Split(program_counter+dest);//branch entry
                 }else{
                     Split(program_counter+dest,program_counter+dest+num);//then branch entry
@@ -69,19 +88,22 @@ bool ControlFlow::Analyze(){
                 if(current_block == block.size){
                     return true;
                 }
+                // - 1 because program counter is incremented after a loop
+                program_counter = block[current_block].in - 1;
+                break;
             case OpCode::Id::BREAK:
             case OpCode::Id::BREAKC:
             case OpCode::Id::LOOP:
             case OpCode::Id::CALL:
             case OpCode::Id::CALLC:
             case OpCode::Id::CALLU:
-                error = ControlFlowError::UnsupportedBranchInstruction;
+                error = CompileError::UnsupportedBranchInstruction;
                 return false;
         }
     }
 }
 
-//Splits a block into two blocks so that the following holds
+//Splits a block into two blocks as following:
 //  |                     |
 //  |branch = branch_instr|
 //  |---------------------|<- index-1;
@@ -90,9 +112,9 @@ bool ControlFlow::Analyze(){
 //             |
 //  |---------------------|<- index;
 //  |                     |
-//  |branch = old_branch  |
+//  |branch = old branch  |
 //
-bool ControlFlow::Split(int index,int branch_instr = MAX_PROGRAM_CODE_LENGTH){
+void ControlFlow::Split(int index,int branch_instr = MAX_PROGRAM_CODE_LENGTH){
     ASSERT(index < MAX_PROGRAM_CODE_LENGTH);
     //for now just loop
     for(int i = 0;i < blocks.size;i++){
@@ -127,6 +149,17 @@ bool ControlFlow::Split(int index,int branch_instr = MAX_PROGRAM_CODE_LENGTH){
     blocks.push_back(block);
 }
 
+GpuShaderCompiler::GpuShaderCompiler(ShaderSetup & setup,int entry_point){
+    this->setup = setup;
+    this->entry_point = entry_point;
+}
+
+bool GpuShaderCompiler::CompileShader(){
+    ControlFlow cf = ControlFlow(*this);
+    if(!cf.Analyze()){
+        this->error = cf.error;
+        return false;
+    }
 } // namespace
 
 } // namespace
