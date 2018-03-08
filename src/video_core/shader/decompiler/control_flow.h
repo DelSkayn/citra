@@ -12,11 +12,12 @@ class ControlFlow{
     public:
 
         enum BlockType{
+            // Does not branch;
+            Sequential = 0,
             If,
             IfElse,
             For,
-            // Does not branch;
-            Sequential;
+            CondCall,
         }
 
         struct ShaderBlock{
@@ -27,28 +28,21 @@ class ControlFlow{
             ShaderBlock * out;
             ShaderBlock * branch;
             BlockType ty;
+            int flag;
 
-            ShaderBlock(unsigned first ,unsigned last,BlockType ty ,ShaderBlock * out,ShaderBlock * branch = nullptr);
             void PushIn(ShaderBlock * block);
         }
 
-        bool Analyze();
-        ShaderBlock * First();
 
-        DecompileError error;
         ControlFlow(CodeArray & program_code,int entry_point);
-
+        void Analyze();
+        ShaderBlock * First();
     private:
-        void Split(int index,int branch_instr = MAX_PROGRAM_CODE_LENGTH);
-        ShaderBlock * Alloc(ShaderBlock);
-        int entry_point;
-        int program_counter;
+        void AnalyzeBlock(ShaderBlock * block);
 
         int next_block_index;
         std::array<ShaderBlock,MAX_PROGRAM_CODE_LENGTH> blocks;
-
-        ShaderBlock * current_block;
-        CodeArray * program_code;
+        CodeArray & program_code;
 }
 
 }// namespace

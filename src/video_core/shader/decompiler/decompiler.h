@@ -21,8 +21,16 @@ class Decompiler{
     DecompileError error;
     CodeArray & program_code;
     int entry_point;
+
+    std::string DecompileBlock(ShaderBlock * block);
+    std::string DecompileCodeBlock(unsigned first,unsigned last);
+
 public:
+    std::string source;
+    DecompileError error;
+
     Decompiler(CodeArray & program_code,int entry_point);
+    bool Decompile();
 }
 
 }
