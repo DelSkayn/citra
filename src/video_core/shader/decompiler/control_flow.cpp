@@ -1,185 +1,168 @@
 
 #include "video_core/shader/decompiler/control_flow.h"
+#include <vector>
+
+using nihstro::OpCode;
+using nihstro::Instruction;
+using nihstro::RegisterType;
+using nihstro::SourceRegister;
+using nihstro::SwizzlePattern;
 
 namespace Pica{
 namespace Shader{
 namespace Decompiler{
 
-void ShaderBlock::PushIn(ShaderBlock * block){
-    for(int i = 0;i < MAX_BLOCK_ENTRIES;i++){
-        if(in[i] == nullptr){
-            in[i] = block;
-            return;
+    ControlFlow::ControlFlow(CodeArray * program_code,unsigned entry_point,unsigned end = MAX_PROGRAM_CODE_LENGTH){
+        this->program_code = program_code;
+        this->entry_point = entry_point;
+        this->blocks = {0};
+        this->num_blocks = 1;
+        this->blocks[0].first = entry_point;
+        this->blocks[0].last = end;
+    }
+
+    void ControlFlow::analyze(){
+        create_blocks();
+        connect_blocks();
+    }
+
+    void ControlFlow::create_blocks(){
+        for(int i = entry_point;i < MAX_PROGRAM_CODE_LENGTH;i++){
+            const Instruction instr = {program_code[i]};
+            int dest = instr.flow_control.dest_offset;
+            int num = instr.flow_control.num_instructions;
+            switch(instr.opcode.Value().EffectiveOpCode()){
+            case OpCode::Id::JMPC:
+            case OpCode::Id::JMPU:
+                split(dest);
+                break;
+            case OpCode::Id::IFU:
+            case OpCode::Id::IFC:
+                split(dest);
+                split(dest+num);
+                break;
+            case OpCode::Id::LOOP:
+                split(dest + 1);
+                break;
+            case OpCode::Id::END:
+                split(i+1);
+                break;
+            case OpCode::Id::CALLU:
+            case OpCode::Id::CALLC:
+            case OpCode::Id::CALL:
+                ProcCall call;
+                call.instr = i;
+                //INCLUSIVE ?
+                call.flow = ControlFlow(program_code,dest,dest+num+1);
+                this->proc_calls.push(call);
+                this->proc_calls.last().flow.analyze();
+                break;
+            }
         }
     }
-    ASSERT(false && "Over max block entries");
-}
 
-ControlFlow::ControlFlow(CodeArray & program_code,int entry_point){
-    this->program_code = program_code;
-    this->blocks = {};
-    this->blocks[0]->first = entry_point;
-    this->blocks[0]->last = MAX_PROGRAM_CODE_LENGTH;
-    this->next_block_index = 1;
-}
+    void ControlFlow::connect_blocks(){
+        int current_block = 0;
+        for(int i = entry_point;i < MAX_PROGRAM_CODE_LENGTH;i++){
 
-void ControlFlow::Analyze(){
-    AnalyzeBlock(&block[0]);
-}
+            if(blocks[current_block].last < i){
+                current_block++;
+            }
 
-ShaderBlock * ControlFlow::First(){
-    &block[0];
-}
+            const Instruction instr = {program_code[i]};
+            int dest = instr.flow_control.dest_offset;
+            int num = instr.flow_control.num_instructions;
 
-void ControlFlow::AnalyzeBlock(ShaderBlock * block){
-    for(int i = block->first;i < block->last;i++){
-        const Instruction instr = {program_code[i]};
-
-        unsigned dest = instr.flow_control.dest_offset;
-        unsigned num = instr.flow_control.num_instructions;
-
-        switch(instr.opcode.Value().EffectiveOpCode()){
+            switch(instr.opcode.Value().EffectiveOpCode()){
             case OpCode::Id::JMPC:
             case OpCode::Id::JMPU:{
-                ShaderBlock * seq_block = &blocks[next_block_index++];
-                ShaderBlock * branch_block = &blocks[next_block_index++];
-
-                branch_block->first = i+dest+1;
-                branch_block->PushIn(block);
-                branch_block->last = block->last;
-                branch_block->out = block->out;
-                branch_block->branch = block->branch;
-
-                seq_block->first = i+1;
-                seq_block->PushIn(block);
-                seq_block->last = i+dest;
-                seq_block->out = branch_block;
-
-                block->last = i;
-                block->out = seq_block;
-                block->branch = branch_block;
-                block->ty = BlockType::If;
-
-                AnalyzeBlock(seq_block);
-                AnalyzeBlock(branch_block);
-                return;
+                int dest_block = find(dest);
+                edge(current_block,current_block+1);
+                edge(current_block,dest_block);
+                break;
             }
             case OpCode::Id::IFU:
             case OpCode::Id::IFC:{
-                ShaderBlock * seq_block = &blocks[next_block_index++];
-                ShaderBlock * else_block = &blocks[next_block_index++];
-                ShaderBlock * after_block = &blocks[next_block_index++];
+                int else_block = find(dest);
+                int exit_block = find(dest + num);
+                int if_block = current_block+1;
 
-                after_block->PushIn(else_block);
-                after_block->PushIn(seq_block);
-                after_block->first = i+dest+num+1;
-                after_block->last = block->last;
-                after_block->branch = block->branch;
-
-                else_block->first = i+dest+1;
-                // Assume inclusive since loop is inclusive
-                else_block->last = i+dest+num;
-                else_block->out = after_block;
-                else_block->PushIn(block);
-
-                seq_block->first = i+1;
-                seq_block->last = i+dest;
-                seq_block->out = after_block;
-                seq_block->PushIn(block);
-
-                block->last = i;
-                block->out = seq_block;
-                block->branch = else_block;
-                block->ty = BlockType::IfElse;
-
-                AnalyzeBlock(seq_block);
-                AnalyzeBlock(else_block);
-                AnalyzeBlock(after_block);
-                return;
+                edge(current_block,if_block);
+                edge(if_block,exit_block);
+                edge(current_block,else_block);
+                edge(else_block,exit_block);
+                break;
             }
-            case OpCode::Id::CALL:{
-                ShaderBlock * call_block = &blocks[next_block_index++];
-                ShaderBlock * next_block = &blocks[next_block_index++];
-
-                next_block->first = i+1;
-                next_block->last = block->last;
-                next_block->out = block->out;
-                next_block->PushIn(block)
-
-                call_block->first = i+dest;
-                //Inclusive?
-                call_block->last = i+dest+num;
-                call_block->PushIn(block);
-                call_block->out = next_block;
-
-                block->out = call_block;
-                block->last = i;
-                AnalyzeBlock(call_block);
-                AnalyzeBlock(next_block);
-                return;
+            case OpCode::Id::LOOP:{
+                int body_block = find(dest + 1) - 1;
+                edge(current_block,current_block+1);
+                edge(body,current_block);
+                edge(current_block,body+1);
+                break;
+            }
+            case OpCode::Id::END:{
+                exit(current_block);
+                break;
             }
             case OpCode::Id::CALLU:
-            case OpCode::Id::CALLC:{
-                ShaderBlock * call_block = &blocks[next_block_index++];
-                ShaderBlock * next_block = &blocks[next_block_index++];
-
-                next_block->first = i+1;
-                next_block->last = block->last;
-                next_block->out = block->out;
-                next_block->PushIn(block)
-
-                call_block->first = i+dest;
-                //Inclusive?
-                call_block->last = i+dest+num;
-                call_block->PushIn(block);
-                call_block->out = next_block;
-
-                block->branch = call_block;
-                block->out = next_block;
-                block->last = i;
-                block->ty = CondCall;
-                AnalyzeBlock(call_block);
-                AnalyzeBlock(next_block);
-                return;
+            case OpCode::Id::CALLC:
+            case OpCode::Id::CALL:
+                ASSERT(false);
             }
-            case OpCode::Id::LOOP:
-                ShaderBlock * loop_block = &block[next_block_index++]
-                ShaderBlock * body_block = &blocks[next_block_index++];
-                ShaderBlock * after_block = &blocks[next_block_index++];
 
-                after_block->first = i+dest+1;
-                after_block->last = block->last;
-                after_block->out = block->out;
-                after_block->PushIn(block);
-
-                body_block->first = i+1;
-                body_block->last = i+dest;
-                body_block->out = block;
-                body_block->PushIn(block);
-
-                loop_block->first = i;
-                loop_block->last = i;
-                loop_block->out = body_block;
-                loop_block->branch_block = after_block;
-                loop_block->PushIn(body_block);
-                loop_block->PushIn(block);
-                loop_block->ty = BlockType::For;
-
-                block->out = loop_block;
-                block->last = i-1;
-
-                AnalyzeBlock(body_block);
-                AnalyzeBlock(next_block);
-                return;
-            case OpCode::Id::END:
-                block->last = i;
-                block->out = nullptr;
-                block->branch = nullptr;
-                block->ty = BlockType::Sequential;
-                return;
+            //Add an edge if there is no other control flow with other ideas.
+            if(blocks[current_block].first == i
+                && out[current_block-1].size() == 0){
+                edge(current_block-1,current_block);
+            }
         }
     }
-}
+
+    void ControlFlow::edge(int from,int to){
+        out[from].push(to);
+        in[to].push(from);
+    }
+
+    void ControlFlow::exit(int from){
+        out[from].push(MAX_PROGRAM_CODE_LENGTH);
+    }
+
+    int ControlFlow::find(int in){
+        int current = num_blocks / 2;
+        int left = 0;
+        int right = num_blocks;
+        for(;;){
+            if(blocks[current].last <= in){
+                left = current+1;
+                current = (right - left) / 2 + left;
+            }else if(blocks[current].first >= in){
+                right = current;
+                current = (right - left) / 2 + left;
+            }else{
+                return current;
+            }
+        }
+    }
+
+    void ControlFlow::split(int in){
+        ASSERT(in >= entry_point);
+        int current = find(in);
+
+        if(blocks[current].first == in){
+            return;
+        }
+
+        CodeBlock new_block;
+        new_block.first = in;
+        new_block.last = blocks[current].last;
+        blocks[current].last = in - 1;
+        num_blocks += 1;
+        for(int i = current + 1;i < num_blocks;i++){
+            CodeBlock tmp = blocks[i];
+            blocks[i] = new_block;
+            new_block = tmp;
+        }
+    }
 
 }// namespace
 }// namespace

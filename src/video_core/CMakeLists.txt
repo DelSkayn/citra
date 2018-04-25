@@ -44,6 +44,9 @@ add_library(video_core STATIC
     shader/shader_interpreter.h
     shader/shader_gpu.cpp
     shader/shader_gpu.h
+    shader/decompiler/control_flow.cpp
+    shader/decompiler/decompiler.cpp
+    shader/shader_gpu.h
     swrasterizer/clipper.cpp
     swrasterizer/clipper.h
     swrasterizer/framebuffer.cpp

@@ -9,7 +9,11 @@ namespace Pica {
 namespace Shader {
 
 class GpuShaderEngine final : public ShaderEngine {
+    struct GpuShader{
+    };
+
     std::unique_ptr<ShaderEngine> fallback;
+    std::unordered_map<u64, std::unique_ptr<GpuShader>> cache;
 public:
     GpuShaderEngine();
     ~GpuShaderEngine() override;

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <array>
-#include <vector>
 #include "video_core/shader/shader.h"
 
 namespace Pica{
@@ -57,36 +56,66 @@ namespace Decompiler{
 //
 
 class ControlFlow{
+    static const unsigned MAX_BLOCK_INPUT = 4;
+    typedef std::array<u32,MAX_PROGRAM_CODE_LENGTH> CodeArray;
     public:
-        struct CodeBlock{
-            unsigned first;
-            unsigned last;
+        enum ControlFlowError{
+            None,
+            CallToAlreadyEncountered,
+            NotSupportedInstruction,
         };
 
-        struct ProcCall{
-            unsigned instr;
-            ControlFlow flow;
+        struct CodeBlock{
+            // A pointer to the block to which this block can jump to.
+            // Can be null if the codeblock does not branch
+            CodeBlock * branch;
+
+            // The pointer to the "normal" next block.
+            // Will only be null if the codeblock exits the program in this block.
+            CodeBlock * exit;
+
+            // The index of the first instruction which is part of this block
+            unsigned first;
+
+            // The index of the last instruction which is part of this block
+            unsigned last;
+
+            CodeBlock * in[MAX_BLOCK_INPUTS];
+            unsigned num_in;
+
+            bool encountered;
         };
+
+        typedef std::array<CodeBlock,MAX_PROGRAM_CODE_LENGTH> BlockArray;
+        typedef std::array<CodeBlock *,MAX_PROGRAM_CODE_LENGTH> BlockPointerArray;
+
+        CodeBlock * first;
+        ControlFlowError error;
 
         ControlFlow(CodeArray * program_code,int entry_point);
-        void analyze();
-        int find(int in);
-        std::array<CodeBlock,MAX_PROGRAM_CODE_LENGTH> blocks;
-        std::array<std::vector<unsigned>,MAX_PROGRAM_CODE_LENGTH> in;
-        std::array<std::vector<unsigned>,MAX_PROGRAM_CODE_LENGTH> out;
-        std::vector<ProcCall> proc_calls;
-        int entry_point;
+
+        bool Analyze();
+
+        static std::string ErrorToString(ControlFlowError error);
     private:
         ControlFlow();
-        unsigned num_blocks;
 
-        void create_blocks();
-        void connect_blocks();
-        void edge(int from,int to);
-        void exit(int from);
-        void split(int in);
+        void Finalize();
+        void AnalyzeBlock(CodeBlock * start,BlockPointerArray & pending,int & num_pending);
 
 
+        CodeBlock * block(unsigned first);
+        CodeBlock * find(unsigned first);
+        CodeBlock * allocate(CodeBlock * previous,unsigned first);
+
+        static ConnectIns(CodeBlock * block);
+
+
+        int num_blocks;
+        BlockArray blocks;
+        BlockPointerArray block_order;
+
+        int entry_point;
         CodeArray * program_code;
 };
 
