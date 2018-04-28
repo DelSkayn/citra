@@ -107,6 +107,7 @@ namespace Decompiler{
             case OpCode::Id::CALLU:
             case OpCode::Id::CALLC:
             case OpCode::Id::CALL:
+                //TODO
                 ASSERT(false);
             }
 
@@ -132,15 +133,14 @@ namespace Decompiler{
         int left = 0;
         int right = num_blocks;
         for(;;){
-            if(blocks[current].last <= in){
-                left = current+1;
-                current = (right - left) / 2 + left;
-            }else if(blocks[current].first >= in){
-                right = current;
-                current = (right - left) / 2 + left;
+            if(blocks[current].last < in){
+                left = current;
+            }else if(blocks[current].first > in){
+                right = current+1;
             }else{
                 return current;
             }
+            current = (right - left) / 2 + left;
         }
     }
 
@@ -162,6 +162,9 @@ namespace Decompiler{
             blocks[i] = new_block;
             new_block = tmp;
         }
+    }
+
+    bool ControlFlow::is_if(int index){
     }
 
 }// namespace

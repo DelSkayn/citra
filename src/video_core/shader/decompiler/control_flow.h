@@ -76,9 +76,9 @@ class ControlFlow{
         std::array<std::vector<unsigned>,MAX_PROGRAM_CODE_LENGTH> out;
         std::vector<ProcCall> proc_calls;
         int entry_point;
+        unsigned num_blocks;
     private:
         ControlFlow();
-        unsigned num_blocks;
 
         void create_blocks();
         void connect_blocks();
