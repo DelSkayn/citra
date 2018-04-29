@@ -3,6 +3,7 @@
 #include "core/core.h"
 #include "video_core/shader/shader.h"
 #include "video_core/shader/decompiler/decompiler.h"
+#include "video_core/shader/decompiler/dominates.h"
 #include "video_core/shader/decompiler/control_flow.h"
 
 using nihstro::OpCode;
@@ -15,127 +16,24 @@ namespace Pica{
 namespace Shader{
 namespace Decompiler{
 
-    Decompiler::Decompiler(CodeArray * program_code,SwizzleArray * swizzle_data,int entry_point){
+    Decompiler::Decompiler(std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> * program_code
+                           , std::array<unsigned,MAX_SWIZZLE_DATA_LENGTH> * swizzle_data
+                           , int entry_point){
         this->program_code = program_code;
         this->swizzle_data = swizzle_data;
         this->entry_point = entry_point;
-        this->error = Error::None;
     }
 
     bool Decompiler::Decompile(){
         ASSERT(this->program_code != nullptr);
         ASSERT(this->swizzle_data != nullptr);
         ControlFlow flow(program_code,entry_point);
-        if(flow.Analyze()){
-            LOG_DEBUG(HW_GPU,"ControlFlow encountered an error while decompiling shader: %s."
-                      , ControlFlow::ErrorToString(flow.error));
-            return true;
-        }
-        ControlFlow::CodeBlock * first = flow.first;
-        GlslControlFlow flow[MAX_PROGRAM_CODE_LENGTH];
-        unsigned flow_count = 0;
-        LOG_DEBUG(HW_GPU,"source:\n%s",DecompileBlock(first).c_str());
-        if(this->error != Error::None){
-            return true;
-        }
-        return false;
+        flow.build();
+        Dominates dominate = Dominates();
+        dominate.build(flow);
     }
 
-    bool Decompiler::GenerateGlslFlow(CodeBlock & block){
-        if (block == nullptr){
-            return;
-        }
-
-        if(block->exit == nullptr){
-            LOG_WARN(HW_GPU,"found block with nullptr exit should not happen");
-            return;
-        }
-
-        if(block->exit == )
-
-        CodeBlock exit = *block->exit;
-        CodeBlock branch = *block->branch;
-
-        bool is_if
-            = branch->exit == nullptr
-            && branch->branch == nullptr;
-
-
-
-
-    }
-
-    GlslControlFlow Decompiler::Recognize(CodeBlock * block){
-        bool is_sequential
-            = block->branch == nullptr
-            && block->exit != nullptr;
-
-        if(is_sequential)
-            return GlslControlFlow::Sequential;
-
-        //
-        // |
-        // 0
-        //
-        bool is_exiting
-            = block->branch == nullptr
-            && block->exit == nullptr;
-
-        if(is_sequential)
-            return GlslControlFlow::Exiting;
-
-        CodeBlock * branch = block->branch;
-        CodeBlock * exit = block->exit;
-
-        //
-        //   |
-        //   0
-        //  / \
-        // 0   0
-        //  \ /
-        //   0
-        //   |
-        //
-        bool is_if_else
-            = branch->branch == nullptr
-            && exit->branch == nullptr
-            && branch->exit == exit->exit;
-        if(is_if_else)
-            return GlslControlFlow::IfElse;
-
-        //
-        // |
-        // 0
-        // |\
-        // 0 )
-        // |/
-        // 0
-        // |
-        //
-        bool is_if
-            = exit->branch == nullptr
-            && exit->exit == branch;
-        if(is_if)
-            return GlslControlFlow::IfElse;
-
-        //
-        //   |
-        //   0
-        //  /|\
-        //  \| |
-        //   0 |
-        //    /
-        //   0
-        //   |
-        //
-        bool is_while
-            = exit->branch == nullptr
-            && exit->exit == block;
-
-        if(is_while)
-            return GlslControlFlow::While;
-    }
-
+    /*
     std::string Decompiler::DecompileBlock(ControlFlow::CodeBlock * block){
         ASSERT(block != nullptr);
         std::string source = DecompileRegion(block->first,block->last);
@@ -323,6 +221,7 @@ namespace Decompiler{
         }
         return source;
     }
+    */
 
 }
 }

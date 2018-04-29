@@ -63,13 +63,12 @@ class ControlFlow{
             unsigned last;
         };
 
-        struct ProcCall{
-            unsigned instr;
-            ControlFlow flow;
-        };
+        struct ProcCall;
 
-        ControlFlow(CodeArray * program_code,int entry_point);
-        void analyze();
+        ControlFlow(std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> * program_code
+                    , unsigned entry_point
+                    , unsigned end = MAX_PROGRAM_CODE_LENGTH);
+        void build();
         int find(int in);
         std::array<CodeBlock,MAX_PROGRAM_CODE_LENGTH> blocks;
         std::array<std::vector<unsigned>,MAX_PROGRAM_CODE_LENGTH> in;
@@ -87,7 +86,12 @@ class ControlFlow{
         void split(int in);
 
 
-        CodeArray * program_code;
+        std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> * program_code;
+};
+
+struct ControlFlow::ProcCall{
+    unsigned instr;
+    ControlFlow flow;
 };
 
 }// namespace

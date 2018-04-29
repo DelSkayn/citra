@@ -11,22 +11,29 @@ namespace Shader{
 namespace Decompiler{
 
 class Dominates{
-    std::array<std::vector<unsigned>,MAX_PROGRAM_CODE_LENGTH> dominates;
-    Dominates();
- public:
-    class DominatesBuilder{
-        class Data{
-            std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> dominates;
-            unsigned len;
-        };
-        std::array<std::vector<unsigned>,MAX_PROGRAM_CODE_LENGTH> dominates;
+    std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> dominated_by;
+    unsigned start_block;
+    struct DominatesBuilder{
+        std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> dominated_by;
+        std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> post_order;
+        std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> post_order_index;
+        unsigned post_order_len;
+        unsigned start_block;
+
+        void gen_post_order(ControlFlow & flow);
+        void gen_post_order_impl(ControlFlow & flow,unsigned block,std::array<bool,MAX_PROGRAM_CODE_LENGTH> & reached);
+        unsigned intersect(unsigned n1,unsigned n2);
         void build(ControlFlow & flow);
-        void push(int block,int dom);
     };
 
-    void calc(ControlFlow & flow);
-}
+ public:
+    Dominates();
+    void build(ControlFlow & flow);
 
+    bool is_dominated_by(unsigned block,unsigned dom);
+
+    unsigned immediate_dom(unsigned block);
+};
 }
 }
 }
