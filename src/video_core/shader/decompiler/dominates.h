@@ -4,7 +4,8 @@
 
 #include <array>
 #include "video_core/shader/shader.h"
-#include "video_core/shader/decompiler/control_flow.h"
+#include "control_flow.h"
+#include "post_order.h"
 
 namespace Pica{
 namespace Shader{
@@ -12,27 +13,22 @@ namespace Decompiler{
 
 class Dominates{
     std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> dominated_by;
+    unsigned dom_len;
+    std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> pre_dominated_by;
+    unsigned pre_dom_len;
     unsigned start_block;
-    struct DominatesBuilder{
-        std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> dominated_by;
-        std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> post_order;
-        std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> post_order_index;
-        unsigned post_order_len;
-        unsigned start_block;
 
-        void gen_post_order(ControlFlow & flow);
-        void gen_post_order_impl(ControlFlow & flow,unsigned block,std::array<bool,MAX_PROGRAM_CODE_LENGTH> & reached);
-        unsigned intersect(unsigned n1,unsigned n2);
-        void build(ControlFlow & flow);
-    };
+    unsigned intersect(unsigned n1,unsigned n2);
+    void build(ControlFlow & flow,PostOrder & order);
 
  public:
     Dominates();
-    void build(ControlFlow & flow);
 
     bool is_dominated_by(unsigned block,unsigned dom);
+    bool is_pre_dominated_by(unsigned block,unsigned dom);
 
     unsigned immediate_dom(unsigned block);
+    unsigned immediate_pred_dom(unsigned block);
 };
 }
 }

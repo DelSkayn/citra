@@ -2,6 +2,7 @@
 
 #include <array>
 #include <vector>
+#include <functional>
 #include "video_core/shader/shader.h"
 
 namespace Pica{
@@ -58,6 +59,18 @@ namespace Decompiler{
 
 class ControlFlow{
     public:
+
+        enum TagType{
+            None,
+            Equal,
+            Not
+        };
+
+        struct Tag{
+            TagType ty;
+            unsigned instr;
+        }
+
         struct CodeBlock{
             unsigned first;
             unsigned last;
@@ -68,24 +81,32 @@ class ControlFlow{
         ControlFlow(std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> * program_code
                     , unsigned entry_point
                     , unsigned end = MAX_PROGRAM_CODE_LENGTH);
+
         void build();
-        int find(int in);
+        unsigned find(unsigned in);
         std::array<CodeBlock,MAX_PROGRAM_CODE_LENGTH> blocks;
         std::array<std::vector<unsigned>,MAX_PROGRAM_CODE_LENGTH> in;
         std::array<std::vector<unsigned>,MAX_PROGRAM_CODE_LENGTH> out;
         std::vector<ProcCall> proc_calls;
         int entry_point;
         unsigned num_blocks;
+        void pre_order(std::function<void (CodeBlock&)> func);
+        void post_order(std::function<void (CodeBlock&)> func);
+        Tag tag(unsigned block,unsigned index);
     private:
+        std::array<std::vector<Tag>,MAX_PROGRAM_CODE_LENGTH> tags;
         ControlFlow();
 
         void create_blocks();
         void connect_blocks();
         void edge(int from,int to);
+        void edge(int from,int to,Tag tag);
         void exit(int from);
         void split(int in);
 
-
+        void pre_order_impl(unsigned block
+                , std::array<bool,MAX_PROGRAM_CODE_LENGTH> & reached
+                , std::function<void (CodeBlock&)> func);
         std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> * program_code;
 };
 

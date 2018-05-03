@@ -54,6 +54,8 @@ namespace Decompiler{
             case OpCode::Id::CALLU:
             case OpCode::Id::CALLC:
             case OpCode::Id::CALL:
+                //TODO
+                ASSERT(false);
                 ProcCall call;
                 call.instr = i;
                 //INCLUSIVE ?
@@ -81,8 +83,8 @@ namespace Decompiler{
             case OpCode::Id::JMPC:
             case OpCode::Id::JMPU:{
                 int dest_block = find(dest);
-                edge(current_block,current_block+1);
-                edge(current_block,dest_block);
+                edge(current_block,current_block+1,{TagType::Not,i});
+                edge(current_block,dest_block,{TagType::Equal,i});
                 break;
             }
             case OpCode::Id::IFU:
@@ -91,17 +93,17 @@ namespace Decompiler{
                 int exit_block = find(dest + num);
                 int if_block = current_block+1;
 
-                edge(current_block,if_block);
+                edge(current_block,if_block,{TagType::Equal,i});
                 edge(if_block,exit_block);
-                edge(current_block,else_block);
+                edge(current_block,else_block,{TagType::Not,i});
                 edge(else_block,exit_block);
                 break;
             }
             case OpCode::Id::LOOP:{
                 int body_block = find(dest + 1) - 1;
-                edge(current_block,current_block+1);
+                edge(current_block,current_block+1,{TagType::Equal,i});
                 edge(body_block,current_block);
-                edge(current_block,body_block+1);
+                edge(current_block,body_block+1,{TagType::Not,i});
                 break;
             }
             case OpCode::Id::END:{
@@ -123,6 +125,16 @@ namespace Decompiler{
         }
     }
 
+    void ControlFlow::edge(int from,int to,Tag tag){
+        auto size = out[from].size();
+        for(auto i = tags[from].size()-1;i < size; i++){
+            tags[from].push_back(Tag{ TagType::None, 0});
+        }
+        tags[from].push_back(tag);
+        out[from].push_back(to);
+        in[to].push_back(from);
+    }
+
     void ControlFlow::edge(int from,int to){
         out[from].push_back(to);
         in[to].push_back(from);
@@ -132,10 +144,10 @@ namespace Decompiler{
         out[from].push_back(MAX_PROGRAM_CODE_LENGTH);
     }
 
-    int ControlFlow::find(int in){
-        int current = num_blocks / 2;
-        int left = 0;
-        int right = num_blocks;
+    unsigned ControlFlow::find(unsigned in){
+        unsigned current = num_blocks / 2;
+        unsigned left = 0;
+        unsigned right = num_blocks;
         for(;;){
             if(blocks[current].last < in){
                 left = current;
@@ -148,9 +160,9 @@ namespace Decompiler{
         }
     }
 
-    void ControlFlow::split(int in){
+    void ControlFlow::split(unsigned in){
         ASSERT(in >= entry_point);
-        int current = find(in);
+        unsigned current = find(in);
 
         if(blocks[current].first == in){
             return;
@@ -167,6 +179,32 @@ namespace Decompiler{
             new_block = tmp;
         }
     }
+
+    void ControlFlow::pre_order(std::functional<void (unsigned,CodeBlock&)> func){
+        std::array<bool,MAX_PROGRAM_CODE_LENGTH> reached = {false};
+        pre_order_impl(find(entry_point),reached,func);
+    }
+
+    void ControlFlow::pre_order_impl(unsinged block
+            , std::array<bool,MAX_PROGRAM_CODE_LENGTH> & reached
+            , std::functional<void (CodeBlock&)> func){
+
+        reached[block] = true;
+        func(block,blocks[block]);
+        for(unsigned out: out[block]){
+            if(!reached[block]){
+                pre_order_impl(out,reached,func);
+            }
+        }
+    }
+
+    Tag ControlFlow::tag(unsigned block,unsigned index){
+        if(index >= tags[block].size()){
+            return {TagType::None, 0};
+        }
+        return tags[block][index];
+    }
+
 
 }// namespace
 }// namespace
