@@ -2,118 +2,80 @@
 
 #include <array>
 #include <vector>
-#include <functional>
+#include <unordered_map>
+#include <boost/optional.hpp>
 #include "video_core/shader/shader.h"
 
 namespace Pica{
 namespace Shader{
 namespace Decompiler{
 
-//
-// # ControlFlow
-//
-// THis part of the code creates a graph that represents the code paths the program might take.
-// A block is a single part of the code in which no branching takes place and is always executed as a whole.
-// Thus code blocks start with an incoming instruction from a separate part of the program. // End and with the end of the program or a branching instruction.
-//
-// # Code flow in PICA
-//
-// Pica has five instructions which impact control flow.
-//
-// * JMP
-// * IF
-// * CALL
-// * LOOP
-// * END
-//
-// JMP allows jumping to a specific part of the code.
-// Either always or conditional.
-//
-// IF Also jumps to a specific part of the code but also allows specifying a number of instructions after which
-// the program will jump back
-//
-//  # Edge cases
-//
-//  1) What if a program jumps over a returning instruction?
-//
-//      Interperter:
-//          Continues executing instructions as if the jump back has never taken place.
-//
-//      We:
-//          Trow error and fallback.
-//
-//  2) What if we have a JMP with retreating edge.
-//
-//      Interperter:
-//          Handles it normaly since it has no problems with jumping code
-//
-//      We:
-//          3 options:
-//              1) Have some optimization which rewrites retreating edges.
-//                 Convert it to something like a do while loop.
-//              2) Treat backward edges as if there a different part of the code.
-//              3) Dont handle it and fallback.
-//
-//
-//
 
 class ControlFlow{
-    public:
+public:
+    struct Node;
+    struct Edge;
+    struct Cond;
 
-        enum TagType{
-            None,
-            Equal,
-            Not
-        };
+    // The first block
+    Rc<Node> start;
+    // the last block
+    Rc<Node> end;
 
-        struct Tag{
-            TagType ty;
-            unsigned instr;
-        }
+    ControlFlow();
+    virtual ~ControlFlow();
 
-        struct CodeBlock{
-            unsigned first;
-            unsigned last;
-        };
+    void build( ProgramArray & program
+              , unsigned first
+              , unsigned last
+              , ProcMap<ControlFlow> & proc);
+private:
+    // Nodes sorted by there instruction.
+    std::vector<Rc<Node>> nodes_by_index;
 
-        struct ProcCall;
+    // returns the node which belongs the the instruction.
+    Rc<Node> find(unsigned instr) const;
+    // returns the index in tne nodes_by_index vector of the node belonging to the instruction.
+    Rc<Node> find_index(unsigned instr) const;
 
-        ControlFlow(std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> * program_code
-                    , unsigned entry_point
-                    , unsigned end = MAX_PROGRAM_CODE_LENGTH);
+    // Split a block which contains the instruction given in to 2 blocks starting with the given instruction.
+    void split(unsigned instr);
 
-        void build();
-        unsigned find(unsigned in);
-        std::array<CodeBlock,MAX_PROGRAM_CODE_LENGTH> blocks;
-        std::array<std::vector<unsigned>,MAX_PROGRAM_CODE_LENGTH> in;
-        std::array<std::vector<unsigned>,MAX_PROGRAM_CODE_LENGTH> out;
-        std::vector<ProcCall> proc_calls;
-        int entry_point;
-        unsigned num_blocks;
-        void pre_order(std::function<void (CodeBlock&)> func);
-        void post_order(std::function<void (CodeBlock&)> func);
-        Tag tag(unsigned block,unsigned index);
-    private:
-        std::array<std::vector<Tag>,MAX_PROGRAM_CODE_LENGTH> tags;
-        ControlFlow();
+    // Block generating pass
+    void build_blocks( ProgramArray & program
+                     , unsigned first
+                     , unsigned last);
 
-        void create_blocks();
-        void connect_blocks();
-        void edge(int from,int to);
-        void edge(int from,int to,Tag tag);
-        void exit(int from);
-        void split(int in);
-
-        void pre_order_impl(unsigned block
-                , std::array<bool,MAX_PROGRAM_CODE_LENGTH> & reached
-                , std::function<void (CodeBlock&)> func);
-        std::array<unsigned,MAX_PROGRAM_CODE_LENGTH> * program_code;
+    // Edge generating pass
+    void build_edges( ProgramArray & program
+                    , unsigned first
+                    , unsigned last
+                    , ProcMap<ControlFlow> & proc);
 };
 
-struct ControlFlow::ProcCall{
+struct ControlFlow::Cond{
     unsigned instr;
-    ControlFlow flow;
+    bool true_edge;
+}
+
+struct ControlFlow::Node{
+    unsigned first;
+    unsigned last;
+
+    std::vector<Rc<Edge>> out;
+    std::vector<Rc<Edge>> in;
+
+    bool is_last();
 };
+
+struct ControlFlow::Edge{
+    Rc<Node> to;
+    Rc<Node> from;
+
+    Option<Cond> cond;
+}
+
+
 
 }// namespace
 }// namespace

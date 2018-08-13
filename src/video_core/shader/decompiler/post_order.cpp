@@ -1,37 +1,24 @@
-#include "post_order.h"
+
+#include "video_core/shader/decompiler/decompiler.h"
 
 namespace Pica{
 namespace Shader{
 namespace Decompiler{
 
-PostOrder::PostOrder(){
-    this->order = {0};
-    this->len = 0;
+PostOrder::PostOrder(ControlFlow & flow){
+    std::unordered_set<unsigned> reached();
+    this->build(flow.start,reached);
 }
 
-void PostOrder::build(ControlFlow & flow){
-    int start_block = flow.find(flow.entry_point);
-    std::array<bool,MAX_PROGRAM_CODE_LENGTH> reached = {false};
-    build_impl(flow,start_block,reached);
-    for(int i = 0;i < len;i++){
-        order_index[order[i]] = i;
-    }
-}
-
-void PostOrder::build_impl(ControlFlow & flow,unsigned block,std::array<bool,MAX_PROGRAM_CODE_LENGTH> & reached){
-    if(reached[block]){
+void PostOrder::build(Rc<ControlFlow::Node> & node,std::unordered_set<unsigned> & reached){
+    if (reached.find(node->first) == reached.end()){
         return;
     }
-    reached[block] = true;
-    for(int i = 0;i < flow.out[block].size();i++){
-        unsigned reach_block = flow.out[block][i];
-        if(reach_block != MAX_PROGRAM_CODE_LENGTH){
-            build_impl(flow,reach_block,reached);
-        }
+    reached.insert(node->first);
+    for(auto out: node->out){
+        build(out,reached);
     }
-    order[len++] = block;
+    this->order.push(*node);
 }
 
-}
-}
-}
+}}}
