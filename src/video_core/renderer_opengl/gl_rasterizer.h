@@ -40,6 +40,7 @@ public:
     void AddTriangle(const Pica::Shader::OutputVertex& v0, const Pica::Shader::OutputVertex& v1,
                      const Pica::Shader::OutputVertex& v2) override;
     void DrawTriangles() override;
+    bool BypassDrawTriangles() override;
     void NotifyPicaRegisterChanged(u32 id) override;
     void FlushAll() override;
     void FlushRegion(PAddr addr, u32 size) override;
@@ -57,6 +58,10 @@ public:
     };
 
 private:
+
+    void BindFrameBuffers(CachedSurface *& color_surface, CachedSurface *& depth_surface);
+    void BindTextures();
+
     struct SamplerInfo {
         using TextureConfig = Pica::TexturingRegs::TextureConfig;
 

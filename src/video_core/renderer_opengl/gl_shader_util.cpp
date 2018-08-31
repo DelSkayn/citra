@@ -2,6 +2,7 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <iostream>
 #include <vector>
 #include <glad/glad.h>
 #include "common/assert.h"
@@ -11,6 +12,10 @@
 namespace GLShader {
 
 GLuint LoadProgram(const char* vertex_shader, const char* fragment_shader) {
+
+    std::cout << "COMPILING SHADER:" << std::endl;
+    std::cout << vertex_shader << std::endl;
+    std::cout << fragment_shader << std::endl;
 
     // Create the shaders
     GLuint vertex_shader_id = glCreateShader(GL_VERTEX_SHADER);

@@ -1,4 +1,7 @@
+
+#include <iostream>
 #include "video_core/shader/decompiler/structurizer.h"
+#include "video_core/shader/decompiler/post_order.h"
 
 namespace Pica{
 namespace Shader{
@@ -6,36 +9,92 @@ namespace Decompiler{
 
 using Node = ASTree::Node;
 using Edge = ASTree::Edge;
+using Seq = ASTree::Seq;
+using If = ASTree::If;
+using IfElse = ASTree::IfElse;
+using While = ASTree::While;
+using DoWhile = ASTree::DoWhile;
 
 
 ASTree::ASTree(): ControlFlow(){}
 
 ASTree::ASTree(ControlFlow & flow): ControlFlow(flow){}
 
-bool Structurizer::build(ASTree & tree){
+void ASTree::print(){
+    print_node(this->start,0);
+}
+
+void ASTree::print_node(Rc<Node> node,unsigned scope){
+    std::string prefix;
+    for(int i = 0;i < scope;i++){
+        prefix.push_back(' ');
+        prefix.push_back(' ');
+    }
+
+    Rc<Seq> seq = std::dynamic_pointer_cast<Seq>(node);
+    if(seq){
+        std::cout << prefix << "SEQ:" << std::endl;
+        print_node(seq->head,scope + 1);
+        print_node(seq->tail,scope + 1);
+        return;
+    }
+    Rc<If> n_if = std::dynamic_pointer_cast<If>(node);
+    if(n_if){
+        std::cout << prefix << "IF:" << std::endl;
+        print_node(n_if->body,scope + 1);
+        return;
+    }
+
+    Rc<IfElse> ifelse = std::dynamic_pointer_cast<IfElse>(node);
+    if(ifelse){
+        std::cout << prefix << "IF ELSE:" << std::endl;
+        print_node(ifelse->true_body,scope + 1);
+        print_node(ifelse->false_body,scope + 1);
+        return;
+    }
+
+    Rc<While> whil = std::dynamic_pointer_cast<While>(node);
+    if(whil){
+        std::cout << prefix << "WHILE:" << std::endl;
+        print_node(whil->body,scope + 1);
+        return;
+    }
+
+    Rc<DoWhile> dowhil = std::dynamic_pointer_cast<DoWhile>(node);
+    if(dowhil){
+        std::cout << prefix << "DO WHILE:" << std::endl;
+        print_node(dowhil->body,scope + 1);
+        return;
+    }
+
+    std::cout << prefix << "NODE:" << node->first << "," << node->last << std::endl;
+}
+
+bool Structurizer::structurize(ASTree & tree){
     PostOrder order(tree);
 
     bool changed = true;
     while(changed){
         changed = false;
-        for(auto node: order->order){
+        for(auto node: order.order){
             changed |= match_node(node);
         }
-        order(tree);
+        order = PostOrder((ControlFlow &)tree);
         if(order.order.size() <= 2){
-            return;
+            return true;
         }
     }
+    return false;
 }
 
 bool Structurizer::match_node(Rc<Node> node){
-    std::cout << "NODE first: " << node->first << " last: " << node-last << std::endl;
+    std::cout << "NODE first: " << node->first << " last: " << node->last << std::endl;
 
     std::cout << "out size(): " << node->out.size() << std::endl;
 
     if(node->out.size() == 1
-       && !node->out[0]->to->is_exit()
-       ** node->out[0]->to->in.size() == 1){
+       && !node->out[0]->to->is_end()
+       && node->out[0]->to->in.size() == 1){
 
         ASSERT(node->out[0]->cond == boost::none);
         match_seq(node,node->out[0]->to);
@@ -47,10 +106,10 @@ bool Structurizer::match_node(Rc<Node> node){
         return false;
     }
 
-    Ptr<Edge> left_edge = node->out[0];
-    Ptr<Edge> right_edge = node->out[1];
-    Ptr<Node> left = left_edge->to;
-    Ptr<Node> right = right_edge->to;
+    Rc<Edge> left_edge = node->out[0];
+    Rc<Edge> right_edge = node->out[1];
+    Rc<Node> left = left_edge->to;
+    Rc<Node> right = right_edge->to;
     bool left_branching = left->out.size() != 1;
     bool right_branching = right->out.size() != 1;
 
@@ -69,19 +128,20 @@ bool Structurizer::match_node(Rc<Node> node){
     }
 
     ASSERT(left->out.size() != 0);
-    ASSERT(rigth->out.size() != 0);
-    ASSERT(!left->out[0]->to->is_last());
-    ASSERT(!right->out[0]->to->is_last());
+    ASSERT(right->out.size() != 0);
+    ASSERT(!left->out[0]->to->is_end());
+    ASSERT(!right->out[0]->to->is_end());
 
     if(left->out[0]->to == right->out[0]->to){
         match_if_else(left_edge,right_edge);
         return true;
     }
+    return false;
 }
 
 bool Structurizer::is_if(Rc<Edge> next, Rc<Edge> jump){
-    Ptr<Node> & exit = next->to->out[0]->to;
-    return exit->is_last()
+    Rc<Node> & exit = next->to->out[0]->to;
+    return exit->is_end()
         || exit == jump->to;
 }
 
@@ -106,14 +166,14 @@ void Structurizer::match_seq(Rc<Node> first, Rc<Node> sec){
 
 void Structurizer::match_if(Rc<Edge> next, Rc<Edge> jump){
     Rc<If> n_if = std::make_shared<If>();
-    n_if->cond = next->cond;
+    n_if->cond = *next->cond;
     n_if->body = next->to;
     n_if->first = next->from->first;
     n_if->last = next->from->last;
     n_if->in = next->from->in;
 
     n_if->out.push_back(jump);
-    n_if->out[0].form = n_if;
+    n_if->out[0]->from = n_if;
 
     for(auto in: n_if->in){
         in->to = n_if;
@@ -128,7 +188,7 @@ void Structurizer::match_if_else(Rc<Edge> left, Rc<Edge> right){
     }
     if_else->true_body = left->to;
     if_else->false_body = right->to;
-    if_else->cond = left->cond;
+    if_else->cond = *left->cond;
     if_else->first = left->from->first;
     if_else->last = left->from->last;
     if_else->in = left->from->in;

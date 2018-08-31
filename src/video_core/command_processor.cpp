@@ -317,6 +317,12 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
             }
         }
 
+        if(regs.pipeline.use_gs == PipelineRegs::UseGS::No){
+            if(VideoCore::g_renderer->Rasterizer()->BypassDrawTriangles()){
+                break;
+            }
+        }
+
         DebugUtils::MemoryAccessTracker memory_accesses;
 
         // Simple circular-replacement vertex cache

@@ -27,8 +27,7 @@ GpuShaderEngine::GpuShaderEngine(){
 
 void GpuShaderEngine::CompileShader(ShaderSetup& setup, unsigned int entry_point){
     LOG_DEBUG(HW_GPU, "Compiling new shader");
-    Decompiler::Decompiler decompiler(&setup.program_code,&setup.swizzle_data,entry_point);
-    decompiler.Decompile();
+    Decompiler::Decompiler::decompile(setup.program_code,setup.swizzle_data,entry_point);
     setup.engine_data.tried_gpu_compilation = true;
 }
 

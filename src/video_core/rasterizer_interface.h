@@ -29,6 +29,10 @@ public:
     /// Draw the current batch of triangles
     virtual void DrawTriangles() = 0;
 
+    virtual bool BypassDrawTriangles(){
+        return false;
+    }
+
     /// Notify rasterizer that the specified PICA register has been changed
     virtual void NotifyPicaRegisterChanged(u32 id) = 0;
 

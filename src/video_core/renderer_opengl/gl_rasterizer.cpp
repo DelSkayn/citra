@@ -1,5 +1,4 @@
 // Copyright 2015 Citra Emulator Project
-// Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
 #include <memory>
@@ -220,16 +219,9 @@ void RasterizerOpenGL::AddTriangle(const Pica::Shader::OutputVertex& v0,
     vertex_batch.emplace_back(v2, AreQuaternionsOpposite(v0.quat, v2.quat));
 }
 
-void RasterizerOpenGL::DrawTriangles() {
-    if (vertex_batch.empty())
-        return;
-
-    MICROPROFILE_SCOPE(OpenGL_Drawing);
+void RasterizerOpenGL::BindFrameBuffers(CachedSurface *& color_surface, CachedSurface *& depth_surface){
     const auto& regs = Pica::g_state.regs;
-
     // Sync and bind the framebuffer surfaces
-    CachedSurface* color_surface;
-    CachedSurface* depth_surface;
     MathUtil::Rectangle<int> rect;
     std::tie(color_surface, depth_surface, rect) =
         res_cache.GetFramebufferSurfaces(regs.framebuffer.framebuffer);
@@ -257,7 +249,6 @@ void RasterizerOpenGL::DrawTriangles() {
         glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0,
                                0);
     }
-
     // Sync the viewport
     // These registers hold half-width and half-height, so must be multiplied by 2
     GLsizei viewport_width =
@@ -303,7 +294,10 @@ void RasterizerOpenGL::DrawTriangles() {
         uniform_block_data.data.scissor_y2 = scissor_y2;
         uniform_block_data.dirty = true;
     }
+}
 
+void RasterizerOpenGL::BindTextures(){
+    const auto& regs = Pica::g_state.regs;
     // Sync and bind the texture surfaces
     const auto pica_textures = regs.texturing.GetTextures();
     for (unsigned texture_index = 0; texture_index < pica_textures.size(); ++texture_index) {
@@ -321,12 +315,6 @@ void RasterizerOpenGL::DrawTriangles() {
         } else {
             state.texture_units[texture_index].texture_2d = 0;
         }
-    }
-
-    // Sync and bind the shader
-    if (shader_dirty) {
-        SetShader();
-        shader_dirty = false;
     }
 
     // Sync the lighting luts
@@ -373,6 +361,27 @@ void RasterizerOpenGL::DrawTriangles() {
         uniform_block_data.proctex_diff_lut_dirty = false;
     }
 
+}
+
+void RasterizerOpenGL::DrawTriangles() {
+    if (vertex_batch.empty())
+        return;
+
+    MICROPROFILE_SCOPE(OpenGL_Drawing);
+    const auto& regs = Pica::g_state.regs;
+
+    CachedSurface * color_surface;
+    CachedSurface * depth_surface;
+
+    BindFrameBuffers(color_surface,depth_surface);
+    BindTextures();
+
+    // Sync and bind the shader
+    if (shader_dirty) {
+        SetShader();
+        shader_dirty = false;
+    }
+
     // Sync the uniform data
     if (uniform_block_data.dirty) {
         glBufferData(GL_UNIFORM_BUFFER, sizeof(UniformData), &uniform_block_data.data,
@@ -400,6 +409,47 @@ void RasterizerOpenGL::DrawTriangles() {
 
     vertex_batch.clear();
 
+    const auto pica_textures = regs.texturing.GetTextures();
+    // Unbind textures for potential future use as framebuffer attachments
+    for (unsigned texture_index = 0; texture_index < pica_textures.size(); ++texture_index) {
+        state.texture_units[texture_index].texture_2d = 0;
+    }
+    state.Apply();
+}
+
+
+bool RasterizerOpenGL::BypassDrawTriangles(){
+    return false;
+    MICROPROFILE_SCOPE(OpenGL_Drawing);
+    const auto& regs = Pica::g_state.regs;
+
+    CachedSurface * color_surface;
+    CachedSurface * depth_surface;
+
+    BindFrameBuffers(color_surface,depth_surface);
+    BindTextures();
+
+    if(shader_dirty){
+        //TODO shaders and shit
+        shader_dirty = false;
+    }
+
+    //TODO set vs uniform block
+
+    //TODO draw shit.
+
+    // Mark framebuffer surfaces as dirty
+    // TODO: Restrict invalidation area to the viewport
+    if (color_surface != nullptr) {
+        color_surface->dirty = true;
+        res_cache.FlushRegion(color_surface->addr, color_surface->size, color_surface, true);
+    }
+    if (depth_surface != nullptr) {
+        depth_surface->dirty = true;
+        res_cache.FlushRegion(depth_surface->addr, depth_surface->size, depth_surface, true);
+    }
+
+    const auto pica_textures = regs.texturing.GetTextures();
     // Unbind textures for potential future use as framebuffer attachments
     for (unsigned texture_index = 0; texture_index < pica_textures.size(); ++texture_index) {
         state.texture_units[texture_index].texture_2d = 0;
