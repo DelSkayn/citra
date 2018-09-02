@@ -48,7 +48,7 @@ using ProcPair = std::pair<Region,T>;
 class Decompiler{
 public:
     Decompiler();
-    static Option<std::string> decompile(ProgramArray & program, SwizzleArray & swizzle, unsigned entry_point);
+    static Option<std::string> decompile(const ProgramArray & program, const SwizzleArray & swizzle, unsigned entry_point);
 };
 
 }}}

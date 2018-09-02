@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <cstring>
 #include <memory>
-#include <unordered_map>
 #include <vector>
 #include <glad/glad.h>
 #include "common/bit_field.h"
@@ -26,6 +25,7 @@
 #include "video_core/renderer_opengl/gl_rasterizer_cache.h"
 #include "video_core/renderer_opengl/gl_resource_manager.h"
 #include "video_core/renderer_opengl/gl_shader_gen.h"
+#include "video_core/renderer_opengl/gl_shader_manager.h"
 #include "video_core/renderer_opengl/gl_state.h"
 #include "video_core/renderer_opengl/pica_to_gl.h"
 #include "video_core/shader/shader.h"
@@ -51,11 +51,6 @@ public:
     bool AccelerateDisplay(const GPU::Regs::FramebufferConfig& config, PAddr framebuffer_addr,
                            u32 pixel_stride, ScreenInfo& screen_info) override;
 
-    /// OpenGL shader generated for a given Pica register state
-    struct PicaShader {
-        /// OpenGL shader resource
-        OGLShader shader;
-    };
 
 private:
 
@@ -160,10 +155,25 @@ private:
     };
 
     static_assert(
-        sizeof(UniformData) == 0x470,
-        "The size of the UniformData structure has changed, update the structure in the shader");
+                  sizeof(UniformData) == 0x470,
+                  "The size of the UniformData structure has changed, update the structure in the shader");
     static_assert(sizeof(UniformData) < 16384,
                   "UniformData structure must be less than 16kb as per the OpenGL spec");
+
+    struct VsUniformData{
+        GLboolean b[16];
+        GLivec4 i[4];
+        GLvec4 f[96];
+    };
+
+    /*static_assert(
+                  sizeof(VsUniformData) == 1515,
+                  "The size of the VsUniformData structure has changed, update the structure in the shader");
+    */
+
+    static_assert(sizeof(VsUniformData) < 16384,
+                  "VsUniformData structure must be less than 16kb as per the OpenGL spec");
+
 
     /// Syncs the clip enabled status to match the PICA register
     void SyncClipEnabled();
@@ -262,15 +272,17 @@ private:
 
     /// Syncs the specified light's distance attenuation scale to match the PICA register
     void SyncLightDistanceAttenuationScale(int light_index);
+    void SyncVertexShaderRegisters();
 
     OpenGLState state;
 
     RasterizerCacheOpenGL res_cache;
 
+    GLShader::GLShaderManager shader_manager;
+
     std::vector<HardwareVertex> vertex_batch;
 
-    std::unordered_map<GLShader::PicaShaderConfig, std::unique_ptr<PicaShader>> shader_cache;
-    const PicaShader* current_shader = nullptr;
+    std::shared_ptr<GLShader::PicaShader> current_shader = nullptr;
     bool shader_dirty;
 
     struct {
@@ -285,10 +297,17 @@ private:
         bool dirty;
     } uniform_block_data = {};
 
+    struct {
+        VsUniformData data;
+        bool dirty;
+    } vs_uniform_block_data = {};
+
+
     std::array<SamplerInfo, 3> texture_samplers;
     OGLVertexArray vertex_array;
     OGLBuffer vertex_buffer;
     OGLBuffer uniform_buffer;
+    OGLBuffer vs_uniform_buffer;
     OGLFramebuffer framebuffer;
 
     OGLBuffer lighting_lut_buffer;

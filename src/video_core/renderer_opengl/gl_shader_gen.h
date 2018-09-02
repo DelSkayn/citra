@@ -9,7 +9,8 @@
 #include <functional>
 #include <string>
 #include <type_traits>
-#include "video_core/regs.h"
+#include "video_core/pica_state.h"
+#include "common/hash.h"
 
 namespace GLShader {
 
@@ -40,7 +41,7 @@ enum Attributes {
 union PicaShaderConfig {
 
     /// Construct a PicaShaderConfig with the given Pica register configuration.
-    static PicaShaderConfig BuildFromRegs(const Pica::Regs& regs);
+    static PicaShaderConfig BuildFromState(const Pica::State & regs);
 
     bool TevStageUpdatesCombinerBufferColor(unsigned stage_index) const {
         return (stage_index < 4) && (state.combiner_buffer_input & (1 << stage_index));
@@ -86,6 +87,11 @@ union PicaShaderConfig {
         Pica::RasterizerRegs::DepthBuffering depthmap_enable;
         Pica::TexturingRegs::FogMode fog_mode;
         bool fog_flip;
+
+        bool gs_enabled;
+        unsigned entry_point;
+        unsigned shader_hash;
+        Pica::RasterizerRegs::VSOutputAttributes vs_output_attributes[7];
 
         struct {
             struct {

@@ -28,6 +28,8 @@ add_library(video_core STATIC
     renderer_opengl/gl_rasterizer_cache.cpp
     renderer_opengl/gl_rasterizer_cache.h
     renderer_opengl/gl_resource_manager.h
+    renderer_opengl/gl_shader_manager.cpp
+    renderer_opengl/gl_shader_manager.h
     renderer_opengl/gl_shader_gen.cpp
     renderer_opengl/gl_shader_gen.h
     renderer_opengl/gl_shader_util.cpp
@@ -37,26 +39,23 @@ add_library(video_core STATIC
     renderer_opengl/pica_to_gl.h
     renderer_opengl/renderer_opengl.cpp
     renderer_opengl/renderer_opengl.h
+    renderer_opengl/decompiler/decompiler.h
+    renderer_opengl/decompiler/code_gen.h
+    renderer_opengl/decompiler/control_flow.h
+    renderer_opengl/decompiler/structurizer.h
+    renderer_opengl/decompiler/code_visitor.h
+    renderer_opengl/decompiler/post_order.h
+    renderer_opengl/decompiler/decompiler.cpp
+    renderer_opengl/decompiler/code_gen.cpp
+    renderer_opengl/decompiler/control_flow.cpp
+    renderer_opengl/decompiler/structurizer.cpp
+    renderer_opengl/decompiler/code_visitor.cpp
+    renderer_opengl/decompiler/post_order.cpp
     shader/debug_data.h
     shader/shader.cpp
     shader/shader.h
     shader/shader_interpreter.cpp
     shader/shader_interpreter.h
-    shader/shader_gpu.cpp
-    shader/shader_gpu.h
-    shader/decompiler/decompiler.h
-    shader/decompiler/code_gen.h
-    shader/decompiler/control_flow.h
-    shader/decompiler/structurizer.h
-    shader/decompiler/code_visitor.h
-    shader/decompiler/post_order.h
-    shader/decompiler/decompiler.cpp
-    shader/decompiler/code_gen.cpp
-    shader/decompiler/control_flow.cpp
-    shader/decompiler/structurizer.cpp
-    shader/decompiler/code_visitor.cpp
-    shader/decompiler/post_order.cpp
-    shader/shader_gpu.h
     swrasterizer/clipper.cpp
     swrasterizer/clipper.h
     swrasterizer/framebuffer.cpp

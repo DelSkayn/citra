@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <boost/optional.hpp>
 #include "video_core/shader/shader.h"
-#include "video_core/shader/decompiler/decompiler.h"
+#include "video_core/renderer_opengl/decompiler/decompiler.h"
 
 namespace Pica{
 namespace Shader{
@@ -26,7 +26,7 @@ public:
     ControlFlow();
     virtual ~ControlFlow();
 
-    void build( ProgramArray & program
+    void build(const ProgramArray & program
               , unsigned first
               , unsigned last
               , ProcMap<ControlFlow> & proc);
@@ -44,12 +44,12 @@ private:
     void edge(Rc<Node> from,Rc<Node> to,Option<Cond> cond);
 
     // Block generating pass
-    void build_blocks( ProgramArray & program
+    void build_blocks(const ProgramArray & program
                      , unsigned first
                      , unsigned last);
 
     // Edge generating pass
-    void build_edges( ProgramArray & program
+    void build_edges(const ProgramArray & program
                     , unsigned first
                     , unsigned last
                     , ProcMap<ControlFlow> & proc);

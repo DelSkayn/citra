@@ -1,6 +1,6 @@
 
-#include "video_core/shader/decompiler/control_flow.h"
-#include "video_core/shader/decompiler/code_visitor.h"
+#include "video_core/renderer_opengl/decompiler/control_flow.h"
+#include "video_core/renderer_opengl/decompiler/code_visitor.h"
 #include <iostream>
 
 using nihstro::OpCode;
@@ -22,7 +22,7 @@ ControlFlow::~ControlFlow(){
     }
 }
 
-void ControlFlow::build(ProgramArray & program, unsigned first, unsigned last,ProcMap<ControlFlow> & proc){
+void ControlFlow::build(const ProgramArray & program, unsigned first, unsigned last,ProcMap<ControlFlow> & proc){
     this->build_blocks(program,first,last);
     this->build_edges(program,first,last,proc);
 }
@@ -89,7 +89,7 @@ bool ControlFlow::Node::is_end(){
     return this->first == PROGRAM_LEN;
 }
 
-void ControlFlow::build_blocks(ProgramArray & program,unsigned first,unsigned last){
+void ControlFlow::build_blocks(const ProgramArray & program,unsigned first,unsigned last){
     std::cout << "BUILD BLOCKS" << std::endl;
     if(first > 0){
         Rc<Node> pre = std::make_shared<Node>();
@@ -158,7 +158,7 @@ void ControlFlow::build_blocks(ProgramArray & program,unsigned first,unsigned la
     }
 }
 
-void ControlFlow::build_edges(ProgramArray & program,unsigned first,unsigned last,ProcMap<ControlFlow> & proc){
+void ControlFlow::build_edges(const ProgramArray & program,unsigned first,unsigned last,ProcMap<ControlFlow> & proc){
     std::cout << "BUILD EDGES" << std::endl;
     CodeVisitor visitor = CodeVisitor(program,first,last);
     Option<unsigned> it = visitor.next_index();

@@ -1,6 +1,6 @@
 
 #include <nihstro/shader_bytecode.h>
-#include "video_core/shader/decompiler/code_visitor.h"
+#include "video_core/renderer_opengl/decompiler/code_visitor.h"
 
 using nihstro::OpCode;
 
@@ -8,7 +8,7 @@ namespace Pica{
 namespace Shader{
 namespace Decompiler{
 
-CodeVisitor::CodeVisitor(ProgramArray & array,unsigned first, unsigned last): array(array){
+CodeVisitor::CodeVisitor(const ProgramArray & array,unsigned first, unsigned last): array(array){
     this->stack.push_back({first,last});
     this->reached = {false};
 }

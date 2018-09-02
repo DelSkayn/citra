@@ -20,7 +20,7 @@
 using GLvec2 = std::array<GLfloat, 2>;
 using GLvec3 = std::array<GLfloat, 3>;
 using GLvec4 = std::array<GLfloat, 4>;
-
+using GLivec4 = std::array<GLint, 4>;
 namespace PicaToGL {
 
 inline GLenum TextureFilterMode(Pica::TexturingRegs::TextureConfig::TextureFilter mode) {

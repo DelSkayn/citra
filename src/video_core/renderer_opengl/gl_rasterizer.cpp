@@ -40,16 +40,25 @@ RasterizerOpenGL::RasterizerOpenGL() : shader_dirty(true) {
     vertex_buffer.Create();
     vertex_array.Create();
     uniform_buffer.Create();
+    vs_uniform_buffer.Create();
 
     state.draw.vertex_array = vertex_array.handle;
     state.draw.vertex_buffer = vertex_buffer.handle;
-    state.draw.uniform_buffer = uniform_buffer.handle;
-    state.Apply();
+    state.draw.uniform_buffer = 0;
 
     // Bind the UBO to binding point 0
+    glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer.handle);
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buffer.handle);
 
+    glBindBuffer(GL_UNIFORM_BUFFER, vs_uniform_buffer.handle);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 1, vs_uniform_buffer.handle);
+
+    state.Apply();
+
+    // Bind the vs UBO to binding point 1
+
     uniform_block_data.dirty = true;
+    vs_uniform_block_data.dirty = true;
 
     uniform_block_data.lut_dirty.fill(true);
 
@@ -384,6 +393,7 @@ void RasterizerOpenGL::DrawTriangles() {
 
     // Sync the uniform data
     if (uniform_block_data.dirty) {
+        glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer.handle);
         glBufferData(GL_UNIFORM_BUFFER, sizeof(UniformData), &uniform_block_data.data,
                      GL_STATIC_DRAW);
         uniform_block_data.dirty = false;
@@ -419,9 +429,18 @@ void RasterizerOpenGL::DrawTriangles() {
 
 
 bool RasterizerOpenGL::BypassDrawTriangles(){
-    return false;
     MICROPROFILE_SCOPE(OpenGL_Drawing);
     const auto& regs = Pica::g_state.regs;
+
+    if(shader_dirty){
+        //TODO shaders and shit
+        SetShader();
+        shader_dirty = false;
+    }
+
+    if(!current_shader->is_bypass){
+        return false;
+    }
 
     CachedSurface * color_surface;
     CachedSurface * depth_surface;
@@ -429,12 +448,23 @@ bool RasterizerOpenGL::BypassDrawTriangles(){
     BindFrameBuffers(color_surface,depth_surface);
     BindTextures();
 
-    if(shader_dirty){
-        //TODO shaders and shit
-        shader_dirty = false;
-    }
 
     //TODO set vs uniform block
+    if (uniform_block_data.dirty) {
+        glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer.handle);
+        glBufferData(GL_UNIFORM_BUFFER, sizeof(UniformData), &uniform_block_data.data,
+                     GL_STATIC_DRAW);
+        uniform_block_data.dirty = false;
+    }
+
+    if(vs_uniform_block_data.dirty){
+        SyncVertexShaderRegisters();
+        glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer.handle);
+        glBufferData(GL_UNIFORM_BUFFER, sizeof(VsUniformData), &vs_uniform_block_data.data
+                     , GL_STATIC_DRAW);
+        vs_uniform_block_data.dirty = false;
+    }
+
 
     //TODO draw shit.
 
@@ -455,6 +485,7 @@ bool RasterizerOpenGL::BypassDrawTriangles(){
         state.texture_units[texture_index].texture_2d = 0;
     }
     state.Apply();
+    return true;
 }
 
 void RasterizerOpenGL::NotifyPicaRegisterChanged(u32 id) {
@@ -485,7 +516,6 @@ void RasterizerOpenGL::NotifyPicaRegisterChanged(u32 id) {
     case PICA_REG_INDEX(rasterizer.viewport_depth_near_plane):
         SyncDepthOffset();
         break;
-
     // Depth buffering
     case PICA_REG_INDEX(rasterizer.depthmap_enable):
         shader_dirty = true;
@@ -933,6 +963,40 @@ void RasterizerOpenGL::NotifyPicaRegisterChanged(u32 id) {
         uniform_block_data.lut_dirty[lut_config.type] = true;
         break;
     }
+
+    case PICA_REG_INDEX_WORKAROUND(vs.swizzle_patterns.set_word[0], 0x2d6):
+    case PICA_REG_INDEX_WORKAROUND(vs.swizzle_patterns.set_word[1], 0x2d7):
+    case PICA_REG_INDEX_WORKAROUND(vs.swizzle_patterns.set_word[2], 0x2d8):
+    case PICA_REG_INDEX_WORKAROUND(vs.swizzle_patterns.set_word[3], 0x2d9):
+    case PICA_REG_INDEX_WORKAROUND(vs.swizzle_patterns.set_word[4], 0x2da):
+    case PICA_REG_INDEX_WORKAROUND(vs.swizzle_patterns.set_word[5], 0x2db):
+    case PICA_REG_INDEX_WORKAROUND(vs.swizzle_patterns.set_word[6], 0x2dc):
+    case PICA_REG_INDEX_WORKAROUND(vs.swizzle_patterns.set_word[7], 0x2dd):
+    case PICA_REG_INDEX_WORKAROUND(vs.program.set_word[0], 0x2cc):
+    case PICA_REG_INDEX_WORKAROUND(vs.program.set_word[1], 0x2cd):
+    case PICA_REG_INDEX_WORKAROUND(vs.program.set_word[2], 0x2ce):
+    case PICA_REG_INDEX_WORKAROUND(vs.program.set_word[3], 0x2cf):
+    case PICA_REG_INDEX_WORKAROUND(vs.program.set_word[4], 0x2d0):
+    case PICA_REG_INDEX_WORKAROUND(vs.program.set_word[5], 0x2d1):
+    case PICA_REG_INDEX_WORKAROUND(vs.program.set_word[6], 0x2d2):
+    case PICA_REG_INDEX_WORKAROUND(vs.program.set_word[7], 0x2d3):
+        shader_dirty = true;
+        break;
+    //TODO: only write single changes?
+    case PICA_REG_INDEX(vs.bool_uniforms):
+    case PICA_REG_INDEX_WORKAROUND(vs.int_uniforms[0], 0x2b1):
+    case PICA_REG_INDEX_WORKAROUND(vs.int_uniforms[1], 0x2b2):
+    case PICA_REG_INDEX_WORKAROUND(vs.int_uniforms[2], 0x2b3):
+    case PICA_REG_INDEX_WORKAROUND(vs.int_uniforms[3], 0x2b4):
+    case PICA_REG_INDEX_WORKAROUND(vs.uniform_setup.set_value[0], 0x2c1):
+    case PICA_REG_INDEX_WORKAROUND(vs.uniform_setup.set_value[1], 0x2c2):
+    case PICA_REG_INDEX_WORKAROUND(vs.uniform_setup.set_value[2], 0x2c3):
+    case PICA_REG_INDEX_WORKAROUND(vs.uniform_setup.set_value[3], 0x2c4):
+    case PICA_REG_INDEX_WORKAROUND(vs.uniform_setup.set_value[4], 0x2c5):
+    case PICA_REG_INDEX_WORKAROUND(vs.uniform_setup.set_value[5], 0x2c6):
+    case PICA_REG_INDEX_WORKAROUND(vs.uniform_setup.set_value[6], 0x2c7):
+    case PICA_REG_INDEX_WORKAROUND(vs.uniform_setup.set_value[7], 0x2c8):
+        vs_uniform_block_data.dirty = true;
     }
 }
 
@@ -1246,80 +1310,66 @@ void RasterizerOpenGL::SamplerInfo::SyncWithConfig(
 }
 
 void RasterizerOpenGL::SetShader() {
-    auto config = GLShader::PicaShaderConfig::BuildFromRegs(Pica::g_state.regs);
-    std::unique_ptr<PicaShader> shader = std::make_unique<PicaShader>();
+    bool cached = true;
+    current_shader = shader_manager.get(Pica::g_state,Pica::g_state.vs,cached);
+    state.draw.shader_program = current_shader->shader.handle;
+    state.Apply();
 
-    // Find (or generate) the GLSL shader for the current TEV state
-    auto cached_shader = shader_cache.find(config);
-    if (cached_shader != shader_cache.end()) {
-        current_shader = cached_shader->second.get();
-
-        state.draw.shader_program = current_shader->shader.handle;
-        state.Apply();
-    } else {
-        LOG_DEBUG(Render_OpenGL, "Creating new shader");
-
-        shader->shader.Create(GLShader::GenerateVertexShader().c_str(),
-                              GLShader::GenerateFragmentShader(config).c_str());
-
-        state.draw.shader_program = shader->shader.handle;
-        state.Apply();
-
+    if(!cached){
         // Set the texture samplers to correspond to different texture units
-        GLint uniform_tex = glGetUniformLocation(shader->shader.handle, "tex[0]");
+        GLint uniform_tex = glGetUniformLocation(current_shader->shader.handle, "tex[0]");
         if (uniform_tex != -1) {
             glUniform1i(uniform_tex, TextureUnits::PicaTexture(0).id);
         }
-        uniform_tex = glGetUniformLocation(shader->shader.handle, "tex[1]");
+        uniform_tex = glGetUniformLocation(current_shader->shader.handle, "tex[1]");
         if (uniform_tex != -1) {
             glUniform1i(uniform_tex, TextureUnits::PicaTexture(1).id);
         }
-        uniform_tex = glGetUniformLocation(shader->shader.handle, "tex[2]");
+        uniform_tex = glGetUniformLocation(current_shader->shader.handle, "tex[2]");
         if (uniform_tex != -1) {
             glUniform1i(uniform_tex, TextureUnits::PicaTexture(2).id);
         }
 
         // Set the texture samplers to correspond to different lookup table texture units
-        GLint uniform_lut = glGetUniformLocation(shader->shader.handle, "lighting_lut");
+        // These are static and will not change betwee shader infocation
+        GLint uniform_lut = glGetUniformLocation(current_shader->shader.handle, "lighting_lut");
         if (uniform_lut != -1) {
             glUniform1i(uniform_lut, TextureUnits::LightingLUT.id);
         }
 
-        GLint uniform_fog_lut = glGetUniformLocation(shader->shader.handle, "fog_lut");
+        GLint uniform_fog_lut = glGetUniformLocation(current_shader->shader.handle, "fog_lut");
         if (uniform_fog_lut != -1) {
             glUniform1i(uniform_fog_lut, TextureUnits::FogLUT.id);
         }
 
         GLint uniform_proctex_noise_lut =
-            glGetUniformLocation(shader->shader.handle, "proctex_noise_lut");
+            glGetUniformLocation(current_shader->shader.handle, "proctex_noise_lut");
         if (uniform_proctex_noise_lut != -1) {
             glUniform1i(uniform_proctex_noise_lut, TextureUnits::ProcTexNoiseLUT.id);
         }
 
         GLint uniform_proctex_color_map =
-            glGetUniformLocation(shader->shader.handle, "proctex_color_map");
+            glGetUniformLocation(current_shader->shader.handle, "proctex_color_map");
         if (uniform_proctex_color_map != -1) {
             glUniform1i(uniform_proctex_color_map, TextureUnits::ProcTexColorMap.id);
         }
 
         GLint uniform_proctex_alpha_map =
-            glGetUniformLocation(shader->shader.handle, "proctex_alpha_map");
+            glGetUniformLocation(current_shader->shader.handle, "proctex_alpha_map");
         if (uniform_proctex_alpha_map != -1) {
             glUniform1i(uniform_proctex_alpha_map, TextureUnits::ProcTexAlphaMap.id);
         }
 
-        GLint uniform_proctex_lut = glGetUniformLocation(shader->shader.handle, "proctex_lut");
+        GLint uniform_proctex_lut = glGetUniformLocation(current_shader->shader.handle, "proctex_lut");
         if (uniform_proctex_lut != -1) {
             glUniform1i(uniform_proctex_lut, TextureUnits::ProcTexLUT.id);
         }
 
         GLint uniform_proctex_diff_lut =
-            glGetUniformLocation(shader->shader.handle, "proctex_diff_lut");
+            glGetUniformLocation(current_shader->shader.handle, "proctex_diff_lut");
         if (uniform_proctex_diff_lut != -1) {
             glUniform1i(uniform_proctex_diff_lut, TextureUnits::ProcTexDiffLUT.id);
         }
-
-        current_shader = shader_cache.emplace(config, std::move(shader)).first->second.get();
 
         GLuint block_index = glGetUniformBlockIndex(current_shader->shader.handle, "shader_data");
         if (block_index != GL_INVALID_INDEX) {
@@ -1353,6 +1403,17 @@ void RasterizerOpenGL::SetShader() {
 
             SyncFogColor();
             SyncProcTexNoise();
+        }
+
+        GLuint vs_block_index = glGetUniformBlockIndex(current_shader->shader.handle, "vs_regs");
+        if(vs_block_index != GL_INVALID_INDEX){
+            GLint block_size;
+            glGetActiveUniformBlockiv(current_shader->shader.handle,vs_block_index,
+                                      GL_UNIFORM_BLOCK_DATA_SIZE, &block_size);
+            ASSERT_MSG(block_size == sizeof(VsUniformData)
+                       , "Uniform block size did not match! Got %d, expected %zu"
+                       , static_cast<int>(block_size), sizeof(VsUniformData));
+            glUniformBlockBinding(current_shader->shader.handle, vs_block_index, 1);
         }
     }
 }
@@ -1736,4 +1797,22 @@ void RasterizerOpenGL::SyncLightDistanceAttenuationScale(int light_index) {
         uniform_block_data.data.light_src[light_index].dist_atten_scale = dist_atten_scale;
         uniform_block_data.dirty = true;
     }
+}
+
+void RasterizerOpenGL::SyncVertexShaderRegisters(){
+    auto & uniforms = Pica::g_state.vs.uniforms;
+    for(unsigned i = 0;i < 16; i++ ){
+        vs_uniform_block_data.data.b[i] = uniforms.b[i];
+    }
+    for(unsigned i = 0;i < 4; i++){
+        auto & dest = vs_uniform_block_data.data.i[i];
+        auto src = uniforms.i[i].Cast<GLint>().AsArray();
+        for(unsigned j = 0;j < 4; j++){
+            dest[j] = src[j];
+        }
+    }
+    static_assert(sizeof(GLfloat) == sizeof(Pica::float24));
+    std::memcpy(&vs_uniform_block_data.data.f[0]
+               , &uniforms.f[0]
+                , sizeof(GLvec4) * 96);
 }

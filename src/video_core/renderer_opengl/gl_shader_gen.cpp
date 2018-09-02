@@ -9,6 +9,7 @@
 #include "common/bit_field.h"
 #include "common/logging/log.h"
 #include "core/core.h"
+#include "video_core/shader/shader.h"
 #include "video_core/regs_framebuffer.h"
 #include "video_core/regs_lighting.h"
 #include "video_core/regs_rasterizer.h"
@@ -61,8 +62,9 @@ layout (std140) uniform shader_data {
 };
 )";
 
-PicaShaderConfig PicaShaderConfig::BuildFromRegs(const Pica::Regs& regs) {
+PicaShaderConfig PicaShaderConfig::BuildFromState(const Pica::State & stat) {
     PicaShaderConfig res;
+    const auto & regs = stat.regs;
 
     auto& state = res.state;
     // Memset structure to zero padding bits, so that they will be deterministic when hashing
@@ -176,6 +178,16 @@ PicaShaderConfig PicaShaderConfig::BuildFromRegs(const Pica::Regs& regs) {
         state.proctex.lut_width = regs.texturing.proctex_lut.width;
         state.proctex.lut_offset = regs.texturing.proctex_lut_offset;
         state.proctex.lut_filter = regs.texturing.proctex_lut.filter;
+    }
+
+    state.gs_enabled = regs.pipeline.use_gs == Pica::PipelineRegs::UseGS::Yes;
+    state.entry_point = regs.vs.main_offset;
+    unsigned code_hash = Common::ComputeHash64((const void *)&stat.vs.program_code[0],Pica::Shader::MAX_PROGRAM_CODE_LENGTH * sizeof(u32));
+    unsigned swizzle_hash = Common::ComputeHash64((const void *)&stat.vs.swizzle_data[0],Pica::Shader::MAX_SWIZZLE_DATA_LENGTH* sizeof(u32));
+    state.shader_hash = code_hash ^ swizzle_hash;
+
+    for(unsigned i = 0;i < 7; i++){
+        state.vs_output_attributes[i].raw = regs.rasterizer.vs_output_attributes[i].raw;
     }
 
     return res;
@@ -1044,71 +1056,11 @@ float ProcTexNoiseCoef(vec2 x) {
     }
 }
 
-std::string GenerateFragmentShader(const PicaShaderConfig& config) {
-    const auto& state = config.state;
 
-    std::string out = R"(
-#version 330 core
 
-in vec4 primary_color;
-in vec2 texcoord[3];
-in float texcoord0_w;
-in vec4 normquat;
-in vec3 view;
-
-in vec4 gl_FragCoord;
-
-out vec4 color;
-
-uniform sampler2D tex[3];
-uniform samplerBuffer lighting_lut;
-uniform samplerBuffer fog_lut;
-uniform samplerBuffer proctex_noise_lut;
-uniform samplerBuffer proctex_color_map;
-uniform samplerBuffer proctex_alpha_map;
-uniform samplerBuffer proctex_lut;
-uniform samplerBuffer proctex_diff_lut;
-)";
-
-    out += UniformBlockDef;
-
-    out += R"(
-// Rotate the vector v by the quaternion q
-vec3 quaternion_rotate(vec4 q, vec3 v) {
-    return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
-}
-
-float LookupLightingLUT(int lut_index, int index, float delta) {
-    vec2 entry = texelFetch(lighting_lut, lut_index * 256 + index).rg;
-    return entry.r + entry.g * delta;
-}
-
-float LookupLightingLUTUnsigned(int lut_index, float pos) {
-    int index = clamp(int(pos * 256.0), 0, 255);
-    float delta = pos * 256.0 - index;
-    return LookupLightingLUT(lut_index, index, delta);
-}
-
-float LookupLightingLUTSigned(int lut_index, float pos) {
-    int index = clamp(int(pos * 128.0), -128, 127);
-    float delta = pos * 128.0 - index;
-    if (index < 0) index += 256;
-    return LookupLightingLUT(lut_index, index, delta);
-}
-
-)";
-
-    if (config.state.proctex.enable)
-        AppendProcTexSampler(out, config);
-
-    // We round the interpolated primary color to the nearest 1/255th
-    // This maintains the PICA's 8 bits of precision
-    out += R"(
-void main() {
-vec4 rounded_primary_color = round(primary_color * 255.0) / 255.0;
-vec4 primary_fragment_color = vec4(0.0);
-vec4 secondary_fragment_color = vec4(0.0);
-)";
+std::string GenerateFragmentShaderBody(const PicaShaderConfig& config){
+    const auto & state = config.state;
+    std::string out;
 
     // Do not do any sort of processing if it's obvious we're not going to pass the alpha test
     if (state.alpha_test_func == FramebufferRegs::CompareFunc::Never) {
@@ -1180,6 +1132,80 @@ vec4 secondary_fragment_color = vec4(0.0);
 
     out += "gl_FragDepth = depth;\n";
     out += "color = last_tex_env_out;\n";
+
+    return out;
+}
+
+
+
+std::string GenerateFragmentShader(const PicaShaderConfig& config) {
+    const auto& state = config.state;
+
+    std::string out = R"(
+#version 330 core
+
+in vec4 primary_color;
+in vec2 texcoord[3];
+in float texcoord0_w;
+in vec4 normquat;
+in vec3 view;
+
+in vec4 gl_FragCoord;
+
+out vec4 color;
+
+uniform sampler2D tex[3];
+uniform samplerBuffer lighting_lut;
+uniform samplerBuffer fog_lut;
+uniform samplerBuffer proctex_noise_lut;
+uniform samplerBuffer proctex_color_map;
+uniform samplerBuffer proctex_alpha_map;
+uniform samplerBuffer proctex_lut;
+uniform samplerBuffer proctex_diff_lut;
+)";
+
+    out += UniformBlockDef;
+
+    out += R"(
+// Rotate the vector v by the quaternion q
+vec3 quaternion_rotate(vec4 q, vec3 v) {
+    return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
+}
+
+float LookupLightingLUT(int lut_index, int index, float delta) {
+    vec2 entry = texelFetch(lighting_lut, lut_index * 256 + index).rg;
+    return entry.r + entry.g * delta;
+}
+
+float LookupLightingLUTUnsigned(int lut_index, float pos) {
+    int index = clamp(int(pos * 256.0), 0, 255);
+    float delta = pos * 256.0 - index;
+    return LookupLightingLUT(lut_index, index, delta);
+}
+
+float LookupLightingLUTSigned(int lut_index, float pos) {
+    int index = clamp(int(pos * 128.0), -128, 127);
+    float delta = pos * 128.0 - index;
+    if (index < 0) index += 256;
+    return LookupLightingLUT(lut_index, index, delta);
+}
+
+)";
+
+    if (config.state.proctex.enable)
+        AppendProcTexSampler(out, config);
+
+    // We round the interpolated primary color to the nearest 1/255th
+    // This maintains the PICA's 8 bits of precision
+    out += R"(
+void main() {
+vec4 rounded_primary_color = round(primary_color * 255.0) / 255.0;
+vec4 primary_fragment_color = vec4(0.0);
+vec4 secondary_fragment_color = vec4(0.0);
+)";
+
+
+    out += GenerateFragmentShaderBody(config);
 
     out += "}";
 

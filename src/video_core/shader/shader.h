@@ -203,8 +203,6 @@ struct ShaderSetup {
         unsigned int entry_point;
         /// Used by the JIT, points to a compiled shader object.
         const void* cached_shader = nullptr;
-        const void* cached_gpu_schader = nullptr;
-        bool tried_gpu_compilation = false;
     } engine_data;
 };
 

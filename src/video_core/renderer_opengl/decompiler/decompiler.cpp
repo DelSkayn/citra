@@ -1,9 +1,9 @@
 #include <nihstro/shader_bytecode.h>
 #include "video_core/shader/shader.h"
-#include "video_core/shader/decompiler/decompiler.h"
-#include "video_core/shader/decompiler/control_flow.h"
-#include "video_core/shader/decompiler/structurizer.h"
-#include "video_core/shader/decompiler/code_gen.h"
+#include "video_core/renderer_opengl/decompiler/decompiler.h"
+#include "video_core/renderer_opengl/decompiler/control_flow.h"
+#include "video_core/renderer_opengl/decompiler/structurizer.h"
+#include "video_core/renderer_opengl/decompiler/code_gen.h"
 
 using nihstro::OpCode;
 using nihstro::Instruction;
@@ -15,7 +15,7 @@ namespace Pica{
 namespace Shader{
 namespace Decompiler{
 
-Option<std::string> Decompiler::decompile(ProgramArray & program, SwizzleArray & swizzle, unsigned entry_point){
+Option<std::string> Decompiler::decompile(const ProgramArray & program, const SwizzleArray & swizzle, unsigned entry_point){
     ASSERT(entry_point < PROGRAM_LEN);
 
     ProcMap<ControlFlow> proc_map;

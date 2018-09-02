@@ -1,7 +1,7 @@
 
 #include <iostream>
-#include "video_core/shader/decompiler/structurizer.h"
-#include "video_core/shader/decompiler/post_order.h"
+#include "video_core/renderer_opengl/decompiler/structurizer.h"
+#include "video_core/renderer_opengl/decompiler/post_order.h"
 
 namespace Pica{
 namespace Shader{

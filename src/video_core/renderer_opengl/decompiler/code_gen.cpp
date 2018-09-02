@@ -1,6 +1,6 @@
 
 #include <iostream>
-#include "video_core/shader/decompiler/code_gen.h"
+#include "video_core/renderer_opengl/decompiler/code_gen.h"
 
 namespace Pica{
 namespace Shader{
@@ -25,6 +25,78 @@ void SourceWriter::pop_stack(){
 }
 void SourceWriter::write(std::string src){
     src += prefix + src + "\n";
+}
+
+std::string CodeGen::get_common_code(){
+    return R"(
+#version 330 core
+
+out vec4 primary_color;
+out vec2 texcoord[3];
+out float texcoord0_w;
+out vec4 normquat;
+out vec3 view;
+
+vec4 vs_out_reg[7];
+
+uniform layout (std140) Registers {
+    bool b[16];
+    ivec4 i[4];
+    vec4 f[96];
+} vs_regs;
+
+)";
+}
+
+
+std::string SymbolTable::get_src1(const SourceRegister & reg,const SwizzlePattern & p){
+    return get_src(reg,[&](int comp){
+        return p.GetSelectorSrc1(comp);
+    });
+}
+
+std::string SymbolTable::get_src2(const SourceRegister & reg,const SwizzlePattern & p){
+    return get_src(reg,[&](int comp){
+        return p.GetSelectorSrc2(comp);
+    });
+}
+
+std::string SymbolTable::get_src3(const SourceRegister & reg,const SwizzlePattern & p){
+    return get_src(reg,[&](int comp){
+        return p.GetSelectorSrc3(comp);
+    });
+}
+
+std::string SymbolTable::set_dest(const DestRegister & reg, const SwizzlePattern & p, std::string value){
+    std::string name;
+    switch (reg.GetRegisterType()){
+    case RegisterType::Output:
+        name = "vs_out_reg[" + std::to_string(reg.GetIndex()) + "]";
+    case RegisterType::Temporary:
+        used_temps[reg.GetIndex()] = true;
+        name = "vs_temp_reg_" + std::to_string(reg.GetIndex());
+    default:
+        ASSERT(false);
+    }
+
+    std::string map;
+    for(int i = 0;i < 4;i++){
+        if(p.DestComponentEnabled(i)){
+            map.push_back("xyzw"[i]);
+        }
+    }
+
+    return name + "." + map + " = (" + value + ")." + map;
+}
+
+std::string SymbolTable::generate_temporary_definitions(){
+    std::string defs;
+    for(int i = 0;i < used_temps.size();i++){
+        if(used_temps[i]){
+            defs += "vec4 vs_temp_reg_" + std::to_string(i) + " = vec4(0.0,0.0,0.0,1.0);\n";
+        }
+    }
+    return defs;
 }
 
 bool CodeGen::generate_proc(Region r,ASTree & tree){
