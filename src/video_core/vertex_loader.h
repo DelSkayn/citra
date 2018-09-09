@@ -29,11 +29,11 @@ public:
         return num_total_attributes;
     }
 
-private:
     std::array<u32, 16> vertex_attribute_sources;
     std::array<u32, 16> vertex_attribute_strides{};
     std::array<PipelineRegs::VertexAttributeFormat, 16> vertex_attribute_formats;
     std::array<u32, 16> vertex_attribute_elements{};
+private:
     std::array<bool, 16> vertex_attribute_is_default;
     int num_total_attributes = 0;
     bool is_setup = false;

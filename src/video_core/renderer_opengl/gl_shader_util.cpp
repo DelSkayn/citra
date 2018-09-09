@@ -2,16 +2,28 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <cstring>
+#include <fstream>
 #include <iostream>
 #include <vector>
 #include <glad/glad.h>
 #include "common/assert.h"
+#include "common/hash.h"
 #include "common/logging/log.h"
 #include "video_core/renderer_opengl/gl_shader_util.h"
 
 namespace GLShader {
 
 GLuint LoadProgram(const char* vertex_shader, const char* fragment_shader) {
+
+    auto len = std::strlen(vertex_shader);
+    auto hash = Common::ComputeHash64(vertex_shader, len);
+    {
+        std::fstream fs;
+        fs.open("vs_" + std::to_string(hash) + ".glsl", std::fstream::out | std::fstream::trunc);
+        fs << vertex_shader << std::endl;
+        fs.close();
+    }
 
     std::cout << "COMPILING SHADER:" << std::endl;
     std::cout << vertex_shader << std::endl;

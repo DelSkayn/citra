@@ -13,6 +13,7 @@
 #include "core/hle/service/gsp/gsp.h"
 #include "core/hw/gpu.h"
 #include "core/memory.h"
+#include "core/settings.h"
 #include "core/tracer/recorder.h"
 #include "video_core/command_processor.h"
 #include "video_core/debug_utils/debug_utils.h"
@@ -286,6 +287,14 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
         if (g_debug_context)
             g_debug_context->OnEvent(DebugContext::Event::IncomingPrimitiveBatch, nullptr);
 
+        bool is_indexed = (id == PICA_REG_INDEX(pipeline.trigger_draw_indexed));
+        if (regs.pipeline.use_gs == PipelineRegs::UseGS::No &&
+            VideoCore::g_gpu_vertex_shader_enabled) {
+
+            if (VideoCore::g_renderer->Rasterizer()->BypassDrawTriangles(is_indexed)) {
+                break;
+            }
+        }
         // Processes information about internal vertex attributes to figure out how a vertex is
         // loaded.
         // Later, these can be compiled and cached.
@@ -294,7 +303,6 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
         Shader::OutputVertex::ValidateSemantics(regs.rasterizer);
 
         // Load vertices
-        bool is_indexed = (id == PICA_REG_INDEX(pipeline.trigger_draw_indexed));
 
         const auto& index_info = regs.pipeline.index_array;
         const u8* index_address_8 = Memory::GetPhysicalPointer(base_address + index_info.offset);
@@ -311,15 +319,10 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
 
                 u8* texture_data = Memory::GetPhysicalPointer(texture.config.GetPhysicalAddress());
                 g_debug_context->recorder->MemoryAccessed(
-                    texture_data, Pica::TexturingRegs::NibblesPerPixel(texture.format) *
-                                      texture.config.width / 2 * texture.config.height,
+                    texture_data,
+                    Pica::TexturingRegs::NibblesPerPixel(texture.format) * texture.config.width /
+                        2 * texture.config.height,
                     texture.config.GetPhysicalAddress());
-            }
-        }
-
-        if(regs.pipeline.use_gs == PipelineRegs::UseGS::No){
-            if(VideoCore::g_renderer->Rasterizer()->BypassDrawTriangles()){
-                break;
             }
         }
 

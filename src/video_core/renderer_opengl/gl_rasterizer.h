@@ -40,7 +40,7 @@ public:
     void AddTriangle(const Pica::Shader::OutputVertex& v0, const Pica::Shader::OutputVertex& v1,
                      const Pica::Shader::OutputVertex& v2) override;
     void DrawTriangles() override;
-    bool BypassDrawTriangles() override;
+    bool BypassDrawTriangles(bool is_index) override;
     void NotifyPicaRegisterChanged(u32 id) override;
     void FlushAll() override;
     void FlushRegion(PAddr addr, u32 size) override;
@@ -51,11 +51,11 @@ public:
     bool AccelerateDisplay(const GPU::Regs::FramebufferConfig& config, PAddr framebuffer_addr,
                            u32 pixel_stride, ScreenInfo& screen_info) override;
 
-
 private:
-
-    void BindFrameBuffers(CachedSurface *& color_surface, CachedSurface *& depth_surface);
+    void BindFrameBuffers(CachedSurface*& color_surface, CachedSurface*& depth_surface);
     void BindTextures();
+    void BindAttributes();
+    unsigned GetVertexDataSize();
 
     struct SamplerInfo {
         using TextureConfig = Pica::TexturingRegs::TextureConfig;
@@ -155,25 +155,25 @@ private:
     };
 
     static_assert(
-                  sizeof(UniformData) == 0x470,
-                  "The size of the UniformData structure has changed, update the structure in the shader");
+        sizeof(UniformData) == 0x470,
+        "The size of the UniformData structure has changed, update the structure in the shader");
     static_assert(sizeof(UniformData) < 16384,
                   "UniformData structure must be less than 16kb as per the OpenGL spec");
 
-    struct VsUniformData{
-        GLboolean b[16];
-        GLivec4 i[4];
-        GLvec4 f[96];
+    struct VsUniformData {
+        alignas(16) GLivec4 i[4];
+        alignas(16) GLvec4 f[96];
+        u32 b[4][16];
     };
 
     /*static_assert(
                   sizeof(VsUniformData) == 1515,
-                  "The size of the VsUniformData structure has changed, update the structure in the shader");
+                  "The size of the VsUniformData structure has changed, update the structure in the
+       shader");
     */
 
     static_assert(sizeof(VsUniformData) < 16384,
                   "VsUniformData structure must be less than 16kb as per the OpenGL spec");
-
 
     /// Syncs the clip enabled status to match the PICA register
     void SyncClipEnabled();
@@ -182,7 +182,7 @@ private:
     void SyncClipCoef();
 
     /// Sets the OpenGL shader in accordance with the current PICA register state
-    void SetShader();
+    void SetShader(bool is_bypass);
 
     /// Syncs the cull mode to match the PICA register
     void SyncCullMode();
@@ -284,6 +284,9 @@ private:
 
     std::shared_ptr<GLShader::PicaShader> current_shader = nullptr;
     bool shader_dirty;
+    bool last_was_bypass;
+
+    bool attributes_dirty();
 
     struct {
         UniformData data;
@@ -302,13 +305,18 @@ private:
         bool dirty;
     } vs_uniform_block_data = {};
 
+    std::vector<u8> vertex_data_buffer;
 
     std::array<SamplerInfo, 3> texture_samplers;
     OGLVertexArray vertex_array;
+    OGLVertexArray bypass_array;
     OGLBuffer vertex_buffer;
+    OGLBuffer index_buffer;
     OGLBuffer uniform_buffer;
     OGLBuffer vs_uniform_buffer;
     OGLFramebuffer framebuffer;
+
+    std::array<bool, 16> enabled_vertex_arrays;
 
     OGLBuffer lighting_lut_buffer;
     OGLTexture lighting_lut;

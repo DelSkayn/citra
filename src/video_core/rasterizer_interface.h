@@ -29,7 +29,7 @@ public:
     /// Draw the current batch of triangles
     virtual void DrawTriangles() = 0;
 
-    virtual bool BypassDrawTriangles(){
+    virtual bool BypassDrawTriangles(bool is_index){
         return false;
     }
 
