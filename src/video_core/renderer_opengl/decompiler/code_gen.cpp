@@ -56,15 +56,18 @@ SymbolTable::SymbolTable(const VSOutputAttributes* out) : out_map(out) {
 }
 
 std::string SymbolTable::get_src1(const SourceRegister& reg, const SwizzlePattern& p) {
-    return get_src(reg, [&](int comp) { return p.GetSelectorSrc1(comp); }, (bool)p.negate_src1 != false);
+    return get_src(reg, [&](int comp) { return p.GetSelectorSrc1(comp); },
+                   (bool)p.negate_src1 != false);
 }
 
 std::string SymbolTable::get_src2(const SourceRegister& reg, const SwizzlePattern& p) {
-    return get_src(reg, [&](int comp) { return p.GetSelectorSrc2(comp); }, (bool)p.negate_src2 != false);
+    return get_src(reg, [&](int comp) { return p.GetSelectorSrc2(comp); },
+                   (bool)p.negate_src2 != false);
 }
 
 std::string SymbolTable::get_src3(const SourceRegister& reg, const SwizzlePattern& p) {
-    return get_src(reg, [&](int comp) { return p.GetSelectorSrc3(comp); }, (bool)p.negate_src3 != false);
+    return get_src(reg, [&](int comp) { return p.GetSelectorSrc3(comp); },
+                   (bool)p.negate_src3 != false);
 }
 
 std::string SymbolTable::get_dest(const DestRegister& reg) {
@@ -357,7 +360,7 @@ bool CodeGen::generate_instruction(const Instruction& instr, const SwizzlePatter
     case OpCode::Id::DP3: {
         writer.write("//DP3");
         // TODO DP3 should only use 3 components?
-        writer.write(table.set_dest(dst, p, "dot( " + src1 + ", " + src2 + ")", 4, 1));
+        writer.write(table.set_dest(dst, p, "dot( vec3(" + src1 + "), vec3(" + src2 + "))", 4, 1));
         break;
     }
     case OpCode::Id::DP4: {
@@ -537,7 +540,7 @@ bool CodeGen::generate_instruction(const Instruction& instr, const SwizzlePatter
         writer.write("//MAD");
         auto src3_reg = instr.mad.GetSrc3(is_inverted);
         auto src3 = table.get_src3(src3_reg, p);
-        writer.write(table.set_dest(dst, p, src3 + " + (" + src2 + " * " + src1 + ")"));
+        writer.write(table.set_dest(dst, p, src1 + " + (" + src2 + " * " + src3 + ")"));
         break;
     }
     default:
