@@ -56,15 +56,15 @@ SymbolTable::SymbolTable(const VSOutputAttributes* out) : out_map(out) {
 }
 
 std::string SymbolTable::get_src1(const SourceRegister& reg, const SwizzlePattern& p) {
-    return get_src(reg, [&](int comp) { return p.GetSelectorSrc1(comp); }, p.negate_src1);
+    return get_src(reg, [&](int comp) { return p.GetSelectorSrc1(comp); }, (bool)p.negate_src1 != false);
 }
 
 std::string SymbolTable::get_src2(const SourceRegister& reg, const SwizzlePattern& p) {
-    return get_src(reg, [&](int comp) { return p.GetSelectorSrc2(comp); }, p.negate_src2);
+    return get_src(reg, [&](int comp) { return p.GetSelectorSrc2(comp); }, (bool)p.negate_src2 != false);
 }
 
 std::string SymbolTable::get_src3(const SourceRegister& reg, const SwizzlePattern& p) {
-    return get_src(reg, [&](int comp) { return p.GetSelectorSrc3(comp); }, p.negate_src3);
+    return get_src(reg, [&](int comp) { return p.GetSelectorSrc3(comp); }, (bool)p.negate_src3 != false);
 }
 
 std::string SymbolTable::get_dest(const DestRegister& reg) {
@@ -341,7 +341,7 @@ bool CodeGen::generate_instruction(const Instruction& instr, const SwizzlePatter
 
     auto src1_reg = is_mad ? instr.mad.GetSrc1(is_inverted) : instr.common.GetSrc1(is_inverted);
     auto src2_reg = is_mad ? instr.mad.GetSrc2(is_inverted) : instr.common.GetSrc2(is_inverted);
-    auto dst_reg = instr.common.dest.Value();
+    auto dst_reg = is_mad ? instr.mad.dest.Value() : instr.common.dest.Value();
     auto dst = table.get_dest(dst_reg);
     std::cout << dst << std::endl;
 
