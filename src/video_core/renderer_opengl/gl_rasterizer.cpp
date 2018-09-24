@@ -392,15 +392,15 @@ void RasterizerOpenGL::DrawTriangles() {
     CachedSurface* color_surface;
     CachedSurface* depth_surface;
 
-    BindFrameBuffers(color_surface, depth_surface);
-    BindTextures();
-
     // Sync and bind the shader
     if (shader_dirty || last_was_bypass) {
         SetShader(false);
         shader_dirty = false;
         last_was_bypass = false;
     }
+
+    BindFrameBuffers(color_surface, depth_surface);
+    BindTextures();
 
     // Sync the uniform data
     if (uniform_block_data.dirty) {
@@ -1478,18 +1478,23 @@ void RasterizerOpenGL::SamplerInfo::SyncWithConfig(
 
 void RasterizerOpenGL::SetShader(bool is_bypass) {
     bool cached = true;
+    bool used = false;
     GLint shader_handle;
     current_shader = shader_manager.get(Pica::g_state, Pica::g_state.vs, cached);
     if (is_bypass) {
         state.draw.shader_program = current_shader->bypass_shader.handle;
         shader_handle = current_shader->bypass_shader.handle;
+        used = current_shader->bypass_used;
+        current_shader->bypass_used = true;
     } else {
         state.draw.shader_program = current_shader->shader.handle;
         shader_handle = current_shader->shader.handle;
+        used = current_shader->shader_used;
+        current_shader->shader_used = true;
     }
     state.Apply();
 
-    if (!cached) {
+    if (!cached || !used) {
         // Set the texture samplers to correspond to different texture units
         GLint uniform_tex = glGetUniformLocation(shader_handle, "tex[0]");
         if (uniform_tex != -1) {
@@ -1575,19 +1580,21 @@ void RasterizerOpenGL::SetShader(bool is_bypass) {
             SyncProcTexNoise();
         }
 
-        GLuint vs_block_index = glGetUniformBlockIndex(shader_handle, "vs_regs");
-        if (vs_block_index != GL_INVALID_INDEX) {
-            GLint block_size;
-            glGetActiveUniformBlockiv(shader_handle, vs_block_index, GL_UNIFORM_BLOCK_DATA_SIZE,
-                                      &block_size);
-            std::cout << "Blocksize: " << block_size << " actual: " << sizeof(VsUniformData)
-                      << std::endl;
-            ASSERT_MSG(block_size == sizeof(VsUniformData),
-                       "Uniform block size did not match! Got %d, expected %zu",
-                       static_cast<int>(block_size), sizeof(VsUniformData));
-            glUniformBlockBinding(shader_handle, vs_block_index, 1);
-        } else {
-            std::cout << "INVALID UNIFORM BLOCK" << std::endl;
+        if (is_bypass) {
+            GLuint vs_block_index = glGetUniformBlockIndex(shader_handle, "vs_regs");
+            if (vs_block_index != GL_INVALID_INDEX) {
+                GLint block_size;
+                glGetActiveUniformBlockiv(shader_handle, vs_block_index, GL_UNIFORM_BLOCK_DATA_SIZE,
+                                          &block_size);
+                std::cout << "Blocksize: " << block_size << " actual: " << sizeof(VsUniformData)
+                          << std::endl;
+                ASSERT_MSG(block_size == sizeof(VsUniformData),
+                           "Uniform block size did not match! Got %d, expected %zu",
+                           static_cast<int>(block_size), sizeof(VsUniformData));
+                glUniformBlockBinding(shader_handle, vs_block_index, 1);
+            } else {
+                std::cout << "INVALID UNIFORM BLOCK" << std::endl;
+            }
         }
     }
 }

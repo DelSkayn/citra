@@ -25,6 +25,8 @@ std::shared_ptr<PicaShader> GLShaderManager::get(const Pica::State& state,
             std::cout << "Failed to compile shader." << std::endl;
             n_shader->is_bypass = false;
         }
+        n_shader->shader_used = false;
+        n_shader->bypass_used = false;
         n_shader->shader.Create(GenerateVertexShader().c_str(),
                                 GenerateFragmentShader(config).c_str());
         shaders.insert(std::make_pair(config, n_shader));

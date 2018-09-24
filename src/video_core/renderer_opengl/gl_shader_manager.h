@@ -12,7 +12,9 @@ namespace GLShader {
 struct PicaShader {
     /// OpenGL shader resource
     OGLShader bypass_shader;
+    bool bypass_used;
     OGLShader shader;
+    bool shader_used;
     bool is_bypass;
 };
 
