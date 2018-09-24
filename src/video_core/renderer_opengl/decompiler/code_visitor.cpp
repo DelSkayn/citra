@@ -1,71 +1,74 @@
 
+#include <iostream>
 #include <nihstro/shader_bytecode.h>
 #include "video_core/renderer_opengl/decompiler/code_visitor.h"
 
 using nihstro::OpCode;
 
-namespace Pica{
-namespace Shader{
-namespace Decompiler{
+namespace Pica {
+namespace Shader {
+namespace Decompiler {
 
-CodeVisitor::CodeVisitor(const ProgramArray & array,unsigned first, unsigned last): array(array){
-    this->stack.push_back({first,last});
+CodeVisitor::CodeVisitor(const ProgramArray& array, unsigned first, unsigned last) : array(array) {
+    this->stack.push_back({first, last});
     this->reached = {false};
 }
 
-Option<Instruction> CodeVisitor::next(){
+Option<Instruction> CodeVisitor::next() {
     auto res = this->next_index();
-    if(res){
+    if (res) {
         Instruction inst = {this->array[*res]};
         return inst;
     }
     return boost::none;
 }
 
-Option<unsigned> CodeVisitor::next_index(){
-    while(stack.size() > 0){
-        Region & r = stack.back();
-        if(r.first > r.last){
+Option<unsigned> CodeVisitor::next_index() {
+    while (stack.size() > 0) {
+        Region& r = stack.back();
+        if (r.first >= r.last) {
             stack.pop_back();
             continue;
         }
         unsigned i = r.first;
         r.first += 1;
-        if(this->reached[i]){
+        if (this->reached[i]) {
             continue;
         }
+        this->reached[i] = true;
         const Instruction instr = {array[i]};
+        std::cout << Decompiler::instruction_to_string(instr) << std::endl;
         const unsigned dest = instr.flow_control.dest_offset;
         const unsigned num = instr.flow_control.num_instructions;
-        switch(instr.opcode.Value().EffectiveOpCode()){
+        switch (instr.opcode.Value().EffectiveOpCode()) {
         case OpCode::Id::JMPC:
-        case OpCode::Id::JMPU:{
+        case OpCode::Id::JMPU: {
             Region cur = stack.back();
             stack.pop_back();
-            Region r = {dest,cur.last};
+            Region r = {dest, cur.last};
             stack.push_back(r);
-            r = {i+1,dest};
+            r = {i + 1, dest};
             stack.push_back(r);
             break;
         }
         case OpCode::Id::IFU:
-        case OpCode::Id::IFC:{
+        case OpCode::Id::IFC: {
             Region cur = stack.back();
             stack.pop_back();
-            Region r = {dest+num,cur.last};
+            Region r = {dest + num, cur.last};
             stack.push_back(r);
-            r = {dest,dest+num};
+            r = {dest, dest + num};
             stack.push_back(r);
-            r = {i+1,dest};
+            r = {i + 1, dest};
             stack.push_back(r);
             break;
         }
-        case OpCode::Id::LOOP:{
+        case OpCode::Id::LOOP: {
             Region cur = stack.back();
             stack.pop_back();
-            Region r = {dest+1,cur.last};
+            Region r = {dest + 1, cur.last};
             stack.push_back(r);
-            r = {i+1,dest+1};
+            r = {i + 1, dest + 1};
             stack.push_back(r);
             break;
         }
@@ -78,4 +81,6 @@ Option<unsigned> CodeVisitor::next_index(){
     return boost::none;
 }
 
-}}}
+} // namespace Decompiler
+} // namespace Shader
+} // namespace Pica

@@ -1,57 +1,62 @@
 
-#include "video_core/renderer_opengl/decompiler/control_flow.h"
-#include "video_core/renderer_opengl/decompiler/code_visitor.h"
 #include <iostream>
+#include "video_core/renderer_opengl/decompiler/code_visitor.h"
+#include "video_core/renderer_opengl/decompiler/control_flow.h"
 
-using nihstro::OpCode;
 using nihstro::Instruction;
+using nihstro::OpCode;
 using nihstro::RegisterType;
 using nihstro::SourceRegister;
 using nihstro::SwizzlePattern;
 
-namespace Pica{
-namespace Shader{
-namespace Decompiler{
+namespace Pica {
+namespace Shader {
+namespace Decompiler {
 
-ControlFlow::ControlFlow(){
-}
+ControlFlow::ControlFlow() {}
 
-ControlFlow::~ControlFlow(){
-    for(Rc<Node> & node: this->nodes_by_index){
+ControlFlow::~ControlFlow() {
+    for (Rc<Node>& node : this->nodes_by_index) {
         node->out.clear();
     }
 }
 
-void ControlFlow::build(const ProgramArray & program, unsigned first, unsigned last,ProcMap<ControlFlow> & proc){
-    this->build_blocks(program,first,last);
-    this->build_edges(program,first,last,proc);
+void ControlFlow::build(const ProgramArray& program, unsigned first, unsigned last,
+                        ProcMap<ControlFlow>& proc) {
+    this->build_blocks(program, first, last);
+    this->build_edges(program, first, last, proc);
 }
 
-
-void ControlFlow::split_at(unsigned instr){
+void ControlFlow::split_at(unsigned instr) {
     ASSERT(instr < PROGRAM_LEN);
     std::cout << "SPLIT: " << instr << std::endl;
 
     unsigned prev_index = *find_index(instr);
     auto prev = this->nodes_by_index[prev_index];
     // dont split if we already have a split at the place.
-    if (prev->first == instr){
+    if (prev->first == instr) {
         return;
     }
     Rc<Node> n = std::make_shared<Node>();
     n->first = instr;
     n->last = prev->last;
-    prev->last = instr-1;
+    prev->last = instr - 1;
 
     auto it = nodes_by_index.begin();
     it += prev_index + 1;
-    nodes_by_index.insert(it,n);
+    nodes_by_index.insert(it, n);
 }
 
-void ControlFlow::edge(Rc<Node> from,Rc<Node> to,Option<Cond> cond = boost::none){
+void ControlFlow::edge(Rc<Node> from, Rc<Node> to, Option<Cond> cond = boost::none) {
+    std::cout << "EDGE: from " << from->first << " to " << to->first << std::endl;
+    for (auto edge : from->out) {
+        if (edge->from == from && edge->to == to) {
+            ASSERT(cond && cond->true_edge == edge->cond->true_edge &&
+                   cond->instr == edge->cond->instr);
+            return;
+        }
+    }
     ASSERT(from->out.size() < 2);
-    std::cout << "EDGE: from " << from->first
-              << " to " << to->first << std::endl;
 
     Rc<Edge> edge = std::make_shared<Edge>();
     edge->cond = cond;
@@ -61,23 +66,22 @@ void ControlFlow::edge(Rc<Node> from,Rc<Node> to,Option<Cond> cond = boost::none
     to->in.push_back(edge);
 }
 
-Option<Rc<ControlFlow::Node>> ControlFlow::find(unsigned instr) const{
+Option<Rc<ControlFlow::Node>> ControlFlow::find(unsigned instr) const {
     return this->nodes_by_index[*find_index(instr)];
 }
 
-Option<unsigned> ControlFlow::find_index(unsigned instr) const{
-    //binary search
+Option<unsigned> ControlFlow::find_index(unsigned instr) const {
+    // binary search
     unsigned first = 0;
     unsigned last = this->nodes_by_index.size() - 1;
-    while(first <= last){
+    while (first <= last) {
         unsigned m = (last + first) / 2.0;
-        if(this->nodes_by_index[m]->first <= instr
-           && this->nodes_by_index[m]->last >= instr){
+        if (this->nodes_by_index[m]->first <= instr && this->nodes_by_index[m]->last >= instr) {
 
             return m;
-        }else if(this->nodes_by_index[m]->first > instr){
+        } else if (this->nodes_by_index[m]->first > instr) {
             last = m - 1;
-        }else{
+        } else {
 
             first = m + 1;
         }
@@ -85,13 +89,13 @@ Option<unsigned> ControlFlow::find_index(unsigned instr) const{
     return boost::none;
 }
 
-bool ControlFlow::Node::is_end(){
+bool ControlFlow::Node::is_end() {
     return this->first == PROGRAM_LEN;
 }
 
-void ControlFlow::build_blocks(const ProgramArray & program,unsigned first,unsigned last){
+void ControlFlow::build_blocks(const ProgramArray& program, unsigned first, unsigned last) {
     std::cout << "BUILD BLOCKS" << std::endl;
-    if(first > 0){
+    if (first > 0) {
         Rc<Node> pre = std::make_shared<Node>();
         pre->first = 0;
         pre->last = first - 1;
@@ -110,43 +114,43 @@ void ControlFlow::build_blocks(const ProgramArray & program,unsigned first,unsig
     this->end = end;
     nodes_by_index.push_back(end);
 
-    CodeVisitor visitor = CodeVisitor(program,first,last);
+    CodeVisitor visitor = CodeVisitor(program, first, last);
     Option<unsigned> it = visitor.next_index();
-    while(it){
+    while (it) {
         unsigned i = *it;
         std::cout << i << std::endl;
         const Instruction instr = {program[i]};
         const unsigned dest = instr.flow_control.dest_offset;
         const unsigned num = instr.flow_control.num_instructions;
-        switch(instr.opcode.Value().EffectiveOpCode()){
+        switch (instr.opcode.Value().EffectiveOpCode()) {
         case OpCode::Id::JMPC:
         case OpCode::Id::JMPU:
             std::cout << "JMP" << std::endl;
-            split_at(i+1);
+            split_at(i + 1);
             split_at(dest);
             break;
         case OpCode::Id::IFU:
         case OpCode::Id::IFC:
-            if(num == 0){
+            if (num == 0) {
                 std::cout << "IF" << std::endl;
-            }else{
+            } else {
                 std::cout << "IF ELSE" << std::endl;
             }
-            split_at(i+1);
+            split_at(i + 1);
             split_at(dest);
-            if(num != 0){
-                split_at(dest+num);
+            if (num != 0) {
+                split_at(dest + num);
             }
             break;
         case OpCode::Id::LOOP:
             std::cout << "LOOP" << std::endl;
             split_at(i);
-            split_at(i+1);
+            split_at(i + 1);
             split_at(dest + 1);
             break;
         case OpCode::Id::END:
             std::cout << "END" << std::endl;
-            split_at(i+1);
+            split_at(i + 1);
             break;
         case OpCode::Id::CALLU:
         case OpCode::Id::CALLC:
@@ -158,81 +162,83 @@ void ControlFlow::build_blocks(const ProgramArray & program,unsigned first,unsig
     }
 }
 
-void ControlFlow::build_edges(const ProgramArray & program,unsigned first,unsigned last,ProcMap<ControlFlow> & proc){
+void ControlFlow::build_edges(const ProgramArray& program, unsigned first, unsigned last,
+                              ProcMap<ControlFlow>& proc) {
     std::cout << "BUILD EDGES" << std::endl;
-    CodeVisitor visitor = CodeVisitor(program,first,last);
+    CodeVisitor visitor = CodeVisitor(program, first, last);
     Option<unsigned> it = visitor.next_index();
     auto cur = start;
-    while(it){
+    while (it) {
         unsigned i = *it;
-        if(cur->first < i || cur->last > i){
+        if (cur->first < i || cur->last > i) {
             cur = *find(i);
         }
+        std::cout << i << std::endl;
         const Instruction instr = {program[i]};
         const unsigned dest = instr.flow_control.dest_offset;
         const unsigned num = instr.flow_control.num_instructions;
-        switch(instr.opcode.Value().EffectiveOpCode()){
+        switch (instr.opcode.Value().EffectiveOpCode()) {
         case OpCode::Id::JMPC:
-        case OpCode::Id::JMPU:{
+        case OpCode::Id::JMPU: {
             std::cout << "JMP" << std::endl;
-            auto next = *find(i+1);
+            auto next = *find(i + 1);
             auto dst = *find(dest);
-            Cond cond = {i,true};
-            edge(cur,dst,cond);
+            Cond cond = {i, true};
+            edge(cur, dst, cond);
             cond.true_edge = false;
-            edge(cur,next,cond);
+            edge(cur, next, cond);
             break;
         }
         case OpCode::Id::IFU:
-        case OpCode::Id::IFC:{
-            auto next = *find(i+1);
+        case OpCode::Id::IFC: {
+            auto next = *find(i + 1);
             auto dst = *find(dest);
-            if(num != 0){
+            if (num == 0) {
                 std::cout << "IF" << std::endl;
-                Cond cond = {i,true};
-                edge(cur,next,cond);
+                Cond cond = {i, true};
+                edge(cur, next, cond);
                 cond.true_edge = false;
-                edge(cur,dst,cond);
+                edge(cur, dst, cond);
                 break;
             }
             std::cout << "IF ELSE" << std::endl;
             auto next_last = *find(dest - 1);
-            auto after = *find(dest+num);
-            Cond cond = {i,true};
-            edge(cur,next,cond);
+            auto after = *find(dest + num);
+            Cond cond = {i, true};
+            edge(cur, next, cond);
             cond.true_edge = false;
-            edge(cur,dst,cond);
-            edge(next_last,after);
+            edge(cur, dst, cond);
+            edge(next_last, after);
             break;
         }
-        case OpCode::Id::LOOP:{
+        case OpCode::Id::LOOP: {
             std::cout << "LOOP" << std::endl;
-            auto next = *find(i+1);
+            auto next = *find(i + 1);
             // +1 because loop is inclusive to dest
             auto next_last = *find(dest + 1);
             // +2 because previous
             auto after = *find(dest + 2);
-            Cond cond = {i,true};
-            edge(next_last,cur);
-            edge(cur,next,cond);
+            Cond cond = {i, true};
+            edge(next_last, cur);
+            edge(cur, next, cond);
             cond.true_edge = false;
-            edge(cur,after,cond);
-            //TODO
+            edge(cur, after, cond);
+            // TODO
             break;
         }
-        case OpCode::Id::END:{
+        case OpCode::Id::END: {
             std::cout << "END" << std::endl;
-            edge(cur,this->end);
+            edge(cur, this->end);
             break;
         }
         case OpCode::Id::CALLU:
         case OpCode::Id::CALLC:
-        case OpCode::Id::CALL:{
+        case OpCode::Id::CALL: {
             std::cout << "CALL" << std::endl;
             ControlFlow flow;
-            flow.build(program,dest,dest+num,proc);
-            Region region = {dest,dest+num};
-            proc.insert(ProcPair<ControlFlow>(region,flow));
+            flow.build(program, dest, dest + num, proc);
+            Region region = {dest, dest + num};
+            proc.insert(ProcPair<ControlFlow>(region, flow));
             break;
         }
         }
@@ -240,14 +246,14 @@ void ControlFlow::build_edges(const ProgramArray & program,unsigned first,unsign
     }
 
     auto prev = this->nodes_by_index[0];
-    for(int i = 1;i < this->nodes_by_index.size();i++){
-        if (prev->out.size() == 0){
-            edge(prev,this->nodes_by_index[i]);
+    for (int i = 1; i < this->nodes_by_index.size(); i++) {
+        if (prev->out.size() == 0) {
+            edge(prev, this->nodes_by_index[i]);
             prev = this->nodes_by_index[i];
         }
     }
 }
 
-}// namespace
-}// namespace
-}// namespace
+} // namespace Decompiler
+} // namespace Shader
+} // namespace Pica

@@ -14,6 +14,8 @@ namespace Pica {
 namespace Shader {
 namespace Decompiler {
 
+using nihstro::Instruction;
+
 const unsigned PROGRAM_LEN = MAX_PROGRAM_CODE_LENGTH;
 const unsigned SWIZZLE_LEN = MAX_SWIZZLE_DATA_LENGTH;
 const unsigned MAX_INPUT_REG = 16;  // TODO
@@ -53,6 +55,8 @@ public:
     Decompiler();
     static Option<std::string> decompile(const ProgramArray& program, const SwizzleArray& swizzle,
                                          unsigned entry_point, const VSOutputAttributes out[7]);
+
+    static std::string instruction_to_string(const Instruction& instr);
 };
 
 } // namespace Decompiler
